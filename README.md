@@ -8,7 +8,7 @@ Configuración estandar de esta aplicación en el archivo docker-compose.yml:
 
 ```yml
 thumbnail:
-    image: thumbnail
+    image: gnoss/thumbnail
     env_file: .env
     environment:
      virtuosoConnectionString: ${virtuosoConnectionString}
