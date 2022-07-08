@@ -4,6 +4,8 @@
 
 Aplicación de segundo plano que se encarga de generar las miniaturas de las imágenes que suben los usuarios a los recursos.
 
+Este servicio está escuchando la cola de nombre "ColaMiniatura". Se envía un mensaje a esta cola cada vez que se crea o edita un recurso desde la Web o el API, para que este servicio se encargue de comprobar si contiene alguna imagen y en caso afirmativo, crear una miniatura de la misma. 
+
 Configuración estandar de esta aplicación en el archivo docker-compose.yml: 
 
 ```yml
@@ -34,4 +36,11 @@ thumbnail:
      - ./logs/thumbnail:/app/logs
 ```
 
-Se pueden consultar los posibles valores de configuración de cada parámetro aquí: https://github.com/equipognoss/Gnoss.Platform.Deploy
+
+Se pueden consultar los posibles valores de configuración de cada parámetro aquí: https://github.com/equipognoss/Gnoss.SemanticAIPlatform.OpenCORE
+
+## Código de conducta
+Este proyecto a adoptado el código de conducta definido por "Contributor Covenant" para definir el comportamiento esperado en las contribuciones a este proyecto. Para más información ver https://www.contributor-covenant.org/
+
+## Licencia
+Este producto es parte de la plataforma [Gnoss Semantic AI Platform Open Core](https://github.com/equipognoss/Gnoss.SemanticAIPlatform.OpenCORE), es un producto open source y está licenciado bajo GPLv3.
