@@ -34,6 +34,9 @@ thumbnail:
      connectionType: "0"
      intervalo: "100"
      Servicios__urlInterno: "https://localhost:4959"
+     scopeIdentity: ${scopeIdentity}
+     clientIDIdentity: ${clientIDIdentity}
+     clientSecretIdentity: ${clientIDIdentity}
     volumes:
      - ./logs/thumbnail:/app/logs
 ```
