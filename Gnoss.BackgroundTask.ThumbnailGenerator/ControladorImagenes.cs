@@ -421,7 +421,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         public bool ObtenerImagenMiniaturaDocumento(Guid pDocumentoID, Guid pPersonaID, Guid pOrganizacionID, string pExtension, LoggingService pLoggingService)
         {
             //Inicializo el servicio de imágenes:
-            mServicioImagenes = new ServicioImagenes(pLoggingService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
             mServicioImagenes.Url = mURLServicioImagenes;
 
             string nombreImagen = pDocumentoID.ToString();
@@ -514,7 +514,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         public bool ObtenerImagenDesdeURLAImagen(Guid pDocumentoID, string pURL, LoggingService pLoggingService)
         {
             //Inicializo el servicio de imágenes:
-            mServicioImagenes = new ServicioImagenes(pLoggingService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
             mServicioImagenes.Url = mURLServicioImagenes;
 
             AbsolutePath = "../" + UtilArchivos.ContentImagenesEnlaces + "/" + UtilArchivos.DirectorioDocumento(pDocumentoID);
@@ -573,7 +573,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
 
         public bool ObtenerImagenSemanticaDesdeURLAImagen(Guid pDocumentoID, string pURL, List<int> pTamaniosImagenesInt, string pNuevaRutaDestino, string pFileNameCExtension, string pFileName, LoggingService pLoggingService)
         {
-            mServicioImagenes = new ServicioImagenes(pLoggingService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
             mServicioImagenes.Url = mURLServicioImagenes;
             mCapturaRealizada = false;
 
@@ -612,7 +612,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                 {
                     // Guardar la imagen sin redimensionar con nombre filaDoc.DocumentoID.ToString() en rutaDestino
                     byte[] imagenArray = null;
-                    mServicioImagenes = new ServicioImagenes(pLoggingService);
+                    mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
                     mServicioImagenes.Url = mURLServicioImagenes;
                     MemoryStream ms = new MemoryStream();
                     img.SaveAsJpeg(ms);
@@ -632,7 +632,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                     foreach (int anchoImagenesInt in pTamaniosImagenesInt)
                     {
                         // Guardar imagen redimensionada en rutaDestino
-                        mServicioImagenes = new ServicioImagenes(pLoggingService);
+                        mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
                         mServicioImagenes.Url = mURLServicioImagenes;
                         ms = new MemoryStream();
 
@@ -680,7 +680,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         public bool ObtenerImagenDesdeDescripcion(Guid pDocumentoID, string pDescripcion, string pUrlIntraGnoss, LoggingService pLoggingService)
         {
             //Inicializo el servicio de imágenes:
-            mServicioImagenes = new ServicioImagenes(pLoggingService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
             mServicioImagenes.Url = mURLServicioImagenes;
 
             AbsolutePath = "../" + UtilArchivos.ContentImagenesEnlaces + "/" + UtilArchivos.DirectorioDocumento(pDocumentoID);

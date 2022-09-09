@@ -1014,7 +1014,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         private void PartirImagenOpenSeaDragon(string pRutaImagen, string pRutaGuardar, string pUrlServicioImagenes, LoggingService loggingService)
         {
             string extension = pRutaImagen.Substring(pRutaImagen.LastIndexOf("."));
-            ServicioImagenes servicioImagenes = new ServicioImagenes(loggingService);
+            ServicioImagenes servicioImagenes = new ServicioImagenes(loggingService, mConfigService);
             servicioImagenes.Url = pUrlServicioImagenes;
             string urlObtServ = pRutaImagen.ToLower().Replace("imagenes/", "");
             urlObtServ = urlObtServ.Substring(0, urlObtServ.LastIndexOf("."));
