@@ -12,7 +12,7 @@ Configuración estandar de esta aplicación en el archivo docker-compose.yml:
 
 ```yml
 thumbnail:
-    image: gnoss/thumbnail
+    image: gnoss/gnoss.backgroundtask.thumbnailgenerator.opencore
     env_file: .env
     environment:
      virtuosoConnectionString: ${virtuosoConnectionString}
