@@ -16,6 +16,7 @@ using Es.Riam.Gnoss.Util.Configuracion;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Processing;
+using Es.Riam.Gnoss.AD.EntityModel;
 
 namespace Es.Riam.Gnoss.ProcesadoTareas
 {
@@ -139,274 +140,6 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         #endregion
 
         #region Métodos
-
-        #region Calculo imagenes Web
-
-        ///// <summary>
-        ///// Obtiene la imagen de la URL de un documento.
-        ///// </summary>
-        ///// <param name="pDocumentoID">Identificador del documento</param>
-        ///// <param name="pUrl">URL a capturar</param>
-        ///// <returns>TRUE si la captura se ha realizado correctamente, FALSE en caso contrario</returns>
-        //public bool ObtenerImagenURLDocumento(Guid pDocumentoID, string pUrl, LoggingService loggingService)
-        //{
-        //    mServicioImagenes = new ServicioImagenes(loggingService);
-        //    mServicioImagenes.Url = mURLServicioImagenes;
-
-        //    this.mUrl = pUrl;
-
-        //    this.AbsolutePath = "../" + UtilArchivos.ContentImagenesEnlaces + "/" + UtilArchivos.DirectorioDocumento(pDocumentoID);
-        //    this.mFileName = pDocumentoID.ToString();
-        //    this.mCapturaRealizada = false;
-
-        //    if (AbsolutePath != null)
-        //    {
-        //        Thread t = new Thread(new ThreadStart(_GetScreenShot));
-        //        t.SetApartmentState(ApartmentState.STA);
-        //        t.Start();
-        //        //Thread.Sleep(mTiempoCapturaURL + 5000);
-
-        //        int tiempoEsperado = 0;
-
-        //        while (tiempoEsperado < mTiempoCapturaURL && !mCapturaRealizada)
-        //        {
-        //            Thread.Sleep(500);
-        //            System.Windows.Forms.Application.DoEvents();
-        //            tiempoEsperado += 500;
-        //        }
-
-        //        if (t.IsAlive)
-        //        {
-        //            t.Abort();
-        //        }
-        //    }
-
-        //    if (mServicioImagenes != null)
-        //    {
-        //        mServicioImagenes = null;
-        //    }
-        //    return mCapturaRealizada;
-        //}
-
-        ///// <summary>
-        ///// Obtiene la imagen de la URL de un documento.
-        ///// </summary>
-        ///// <param name="pDocumentoID">Identificador del documento</param>
-        ///// <param name="pUrl">URL a capturar</param>
-        ///// <returns>TRUE si la captura se ha realizado correctamente, FALSE en caso contrario</returns>
-        //public byte[] ObtenerImagenURLDocumentoDevuelveImagen(string pUrl)
-        //{
-        //    mServicioImagenes = new ServicioImagenes();
-        //    mServicioImagenes.Url = mURLServicioImagenes;
-
-        //    this.mUrl = pUrl;
-
-        //    Thread t = new Thread(new ThreadStart(_GetScreenShotDevuelveImagen));
-        //    t.SetApartmentState(ApartmentState.STA);
-        //    t.Start();
-        //    //Thread.Sleep(mTiempoCapturaURL + 5000);
-
-        //    int tiempoEsperado = 0;
-
-        //    while (tiempoEsperado < mTiempoCapturaURL && !mCapturaRealizada)
-        //    {
-        //        Thread.Sleep(500);
-        //        System.Windows.Forms.Application.DoEvents();
-        //        tiempoEsperado += 500;
-        //    }
-
-        //    if (t.IsAlive)
-        //    {
-        //        t.Abort();
-        //    }
-
-
-        //    if (mServicioImagenes != null)
-        //    {
-        //        mServicioImagenes.Dispose();
-        //        mServicioImagenes = null;
-        //    }
-        //    return mImagen;
-        //}
-
-        ///// <summary>
-        ///// Captura la imagen de una web.
-        ///// </summary>
-        //private void _GetScreenShot()
-        //{
-        //    try
-        //    {
-        //        mWebBrowser = new System.Windows.Forms.WebBrowser();
-        //        mWebBrowser.ScrollBarsEnabled = false;
-        //        mWebBrowser.ScriptErrorsSuppressed = true;
-        //        mWebBrowser.DocumentCompleted += new System.Windows.Forms.WebBrowserDocumentCompletedEventHandler(WebBrowser_DocumentCompleted);
-        //        mWebBrowser.Navigate(mUrl);
-
-        //        int tiempoEsperado = 0;
-
-        //        while (tiempoEsperado < mTiempoCapturaURL && !mCapturaRealizada)
-        //        {
-        //            Thread.Sleep(500);
-        //            System.Windows.Forms.Application.DoEvents();
-        //            tiempoEsperado += 500;
-        //        }
-
-        //        if (mWebBrowser != null)
-        //        {
-        //            mWebBrowser.Dispose();
-        //            mWebBrowser = null;
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        this.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
-        //    }
-        //}
-
-        ///// <summary>
-        ///// Devuelve la imagen capturada por una web
-        ///// </summary>
-        //private void _GetScreenShotDevuelveImagen()
-        //{
-        //    try
-        //    {
-        //        mImagen = null;
-        //        mImagenMax = null;
-        //        mWebBrowser = new System.Windows.Forms.WebBrowser();
-        //        mWebBrowser.ScrollBarsEnabled = false;
-        //        mWebBrowser.ScriptErrorsSuppressed = true;
-        //        mWebBrowser.DocumentCompleted += new System.Windows.Forms.WebBrowserDocumentCompletedEventHandler(WebBrowser_DocumentCompletedDevuelveImagen);
-
-        //        mWebBrowser.Navigate(mUrl);
-
-        //        int tiempoEsperado = 0;
-
-        //        while (tiempoEsperado < mTiempoCapturaURL && !mCapturaRealizada)
-        //        {
-        //            Thread.Sleep(500);
-        //            System.Windows.Forms.Application.DoEvents();
-        //            tiempoEsperado += 500;
-        //        }
-
-        //        if (mWebBrowser != null)
-        //        {
-        //            mWebBrowser.Dispose();
-        //            mWebBrowser = null;
-        //        }
-
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        this.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
-
-        //    }
-        //}
-
-        ///// <summary>
-        ///// Se ejecuta al completarse la captura de una web.
-        ///// </summary>
-        ///// <param name="sender">El que produce el evento</param>
-        ///// <param name="e">Argumentos del evento</param>
-        //private void WebBrowser_DocumentCompleted(object sender, System.Windows.Forms.WebBrowserDocumentCompletedEventArgs e)
-        //{
-        //    try
-        //    {
-        //        mWebBrowser = (System.Windows.Forms.WebBrowser)sender;
-        //        mWebBrowser.ClientSize = new System.Drawing.Size(WidthImg, HeightImg);
-        //        mWebBrowser.ScrollBarsEnabled = false;
-        //        System.Drawing.Bitmap bmp = new System.Drawing.Bitmap(mWebBrowser.Bounds.Width, mWebBrowser.Bounds.Height);
-        //        mWebBrowser.BringToFront();
-        //        mWebBrowser.DrawToBitmap(bmp, mWebBrowser.Bounds);
-
-
-        //        //Para las capturas de pantalla, la mejor manera es con la clase Graphics, no pierde calidad.
-        //        //System.Drawing.Image img = bmp.GetThumbnailImage(ThumbWidthImg, ThumbHeightImg, null, IntPtr.Zero);
-
-        //        MemoryStream ms = new MemoryStream();
-        //        Bitmap newImage = new Bitmap(ThumbWidthImg, ThumbHeightImg);
-        //        using (Graphics gr = Graphics.FromImage(newImage))
-        //        {
-        //            gr.SmoothingMode = SmoothingMode.HighQuality;
-        //            gr.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        //            gr.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        //            gr.DrawImage(bmp, new Rectangle(0, 0, ThumbWidthImg, ThumbHeightImg));
-        //        }
-        //        newImage.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
-
-        //        string path = AbsolutePath + mFileName;
-
-        //        if (AbsolutePath != null)
-        //        {
-        //            byte[] buffer = ms.GetBuffer();
-        //            mServicioImagenes.AgregarImagenADirectorio(buffer, AbsolutePath, mFileName, ".jpg");
-        //            ms.Dispose();
-        //            mServicioImagenes.Dispose();
-        //            mServicioImagenes = null;
-
-        //            //Especifico que la captura se ha realizado con exito:
-        //            mCapturaRealizada = true;
-        //        }
-
-        //        mWebBrowser.Dispose();
-        //        mWebBrowser = null;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        this.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
-        //    }
-        //}
-
-        ///// <summary>
-        ///// Se ejecuta al completarse la captura de una web.
-        ///// </summary>
-        ///// <param name="sender">El que produce el evento</param>
-        ///// <param name="e">Argumentos del evento</param>
-        //private void WebBrowser_DocumentCompletedDevuelveImagen(object sender, System.Windows.Forms.WebBrowserDocumentCompletedEventArgs e)
-        //{
-        //    try
-        //    {
-        //        mWebBrowser = (System.Windows.Forms.WebBrowser)sender;
-        //        mWebBrowser.ClientSize = new System.Drawing.Size(WidthImg, HeightImg);
-        //        mWebBrowser.ScrollBarsEnabled = false;
-        //        System.Drawing.Bitmap bmp = new System.Drawing.Bitmap(mWebBrowser.Bounds.Width, mWebBrowser.Bounds.Height);
-        //        mWebBrowser.BringToFront();
-        //        mWebBrowser.DrawToBitmap(bmp, mWebBrowser.Bounds);
-
-
-        //        MemoryStream ms = new MemoryStream();
-        //        MemoryStream ms_Max = new MemoryStream();
-        //        Bitmap newImage = new Bitmap(ThumbWidthImg, ThumbHeightImg);
-        //        using (Graphics gr = Graphics.FromImage(newImage))
-        //        {
-        //            gr.SmoothingMode = SmoothingMode.HighQuality;
-        //            gr.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        //            gr.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        //            gr.DrawImage(bmp, new Rectangle(0, 0, ThumbWidthImg, ThumbHeightImg));
-        //        }
-        //        newImage.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
-        //        bmp.Save(ms_Max, System.Drawing.Imaging.ImageFormat.Jpeg);
-                
-        //        //Devolvemos la imagen grande para que haga capturas de esta imagen.
-
-
-        //        byte[] buffer_Max = ms_Max.GetBuffer();
-        //        ms_Max.Dispose();
-        //        mImagenMax = buffer_Max;
-                
-        //        byte[] buffer = ms.GetBuffer();
-        //        ms.Dispose();
-        //        mImagen = buffer;
-        //        mWebBrowser.Dispose();
-        //        mWebBrowser = null;
-
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        this.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
-        //    }
-        //}
-
-        #endregion
 
         #region Calculo imagenes miniatura
 
@@ -581,7 +314,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
             {
                 Image img = null;
                 Image img_Max = null;
-                if (pURL.EndsWith(".jpg"))
+                if (pURL.ToLower().EndsWith(".jpg") || pURL.ToLower().EndsWith(".jpeg") || pURL.ToLower().EndsWith(".png"))
                 {
                     #region Imagen
                     WebRequest requestPic = WebRequest.Create(pURL);
@@ -677,7 +410,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         #endregion
 
         #region Calculo imágenes desde una descripción
-        public bool ObtenerImagenDesdeDescripcion(Guid pDocumentoID, string pDescripcion, string pUrlIntraGnoss, LoggingService pLoggingService)
+        public bool ObtenerImagenDesdeDescripcion(Guid pDocumentoID, string pDescripcion, string pUrlIntraGnoss, LoggingService pLoggingService, ConfigService pConfigService, EntityContext pEntityContext)
         {
             //Inicializo el servicio de imágenes:
             mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
@@ -762,7 +495,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
 
                                 if (exito)
                                 {
-                                    string urlImageVimeo = ObtenerUrlImagenVimeo(ruta, idVideo);
+                                    string urlImageVimeo = ObtenerUrlImagenVimeo(ruta, idVideo, pEntityContext, pConfigService, pLoggingService);
                                     if (!string.IsNullOrEmpty(urlImageVimeo))
                                     {
                                         listaFotos.Add(caracteractualIframe, urlImageVimeo);
@@ -861,21 +594,25 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         /// </summary>
         /// <param name="pUrlVideo">Url del vídeo</param>
         /// <returns>Url de la imagen</returns>
-        private string ObtenerUrlImagenVimeo(string pUrlVideo, int pIdVideo)
+        private string ObtenerUrlImagenVimeo(string pUrlVideo, int pIdVideo, EntityContext pEntityContext, ConfigService pConfigService, LoggingService pLoggingService)
         {
+            ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null);
             string urlImagen = "";
-            //TODO Javi
-            //https://developer.vimeo.com/api/reference/videos?version=3.4#get_video_thumbnails
-            using (XmlTextReader reader = new XmlTextReader("http://vimeo.com/api/v2/video/" + pIdVideo + ".xml"))
+            string token = paramCN.ObtenerParametroAplicacion("VimeoAccessToken");
+
+            if (!string.IsNullOrEmpty(token))
             {
-                reader.MoveToContent();
-                reader.ReadStartElement();
-                while (reader.Read())
+                string peticion = $"https://api.vimeo.com/videos/{pIdVideo}/pictures";
+                string response = UtilGeneral.WebRequest("GET", peticion, token, null);
+                string[] campos = response.Split(',');
+
+                for (int i = 0; i < campos.Length; i++)
                 {
-                    //ruta de la imagen
-                    if (reader.NodeType == XmlNodeType.Element && reader.Name == "thumbnail_large")
+                    if (campos[i].Contains("base_link"))
                     {
-                        urlImagen = reader.ReadString();
+                        campos[i] = campos[i].Replace("\"", "");
+                        urlImagen = campos[i].Replace("base_link:", "");
+                        break;
                     }
                 }
             }
