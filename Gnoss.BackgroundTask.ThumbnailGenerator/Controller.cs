@@ -103,7 +103,9 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                 LoggingService loggingService = scope.ServiceProvider.GetRequiredService<LoggingService>();
                 VirtuosoAD virtuosoAD = scope.ServiceProvider.GetRequiredService<VirtuosoAD>();
                 RedisCacheWrapper redisCacheWrapper = scope.ServiceProvider.GetRequiredService<RedisCacheWrapper>();
+                ConfigService configService = scope.ServiceProvider.GetRequiredService<ConfigService>();
                 IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication = scope.ServiceProvider.GetRequiredService<IServicesUtilVirtuosoAndReplication>();
+                ComprobarTraza("ThumbnailGenerator", entityContext, loggingService, redisCacheWrapper, configService, servicesUtilVirtuosoAndReplication);
                 try
                 {
                     ComprobarCancelacionHilo();
@@ -121,7 +123,6 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                         dataWrapperDocumentacion.ListaColaDocumento.Add(filaColaDocumento);
 
                         ProcesarFilaColaDocumento(dataWrapperDocumentacion, entityContext, loggingService, redisCacheWrapper, virtuosoAD, servicesUtilVirtuosoAndReplication);
-                        servicesUtilVirtuosoAndReplication.ConexionAfinidad = "";
 
                         ControladorConexiones.CerrarConexiones(false);
                     }
@@ -131,6 +132,10 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                 {
                     loggingService.GuardarLog(ex.Message);
                     return true;
+                }
+                finally
+                {
+                    GuardarTraza(loggingService);
                 }
             }
         }
@@ -179,8 +184,8 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                             }
                         }
 
-                        int anchoCap = 240;
-                        int altoCap = 200;
+                        int anchoCap = 180;
+                        int altoCap = 160;
 
                         if (!string.IsNullOrEmpty(mTamanioCapturasProyecto[filaDoc.ProyectoID.Value]))
                         {
@@ -218,7 +223,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     //string urlIntraGnoss = (string)paramCN.ObtenerConfiguracionGnoss().ParametroAplicacion.Select("Parametro = 'UrlIntragnoss'")[0]["Valor"];
                                     string urlIntraGnoss = gestorParametroAplicacion.ParametroAplicacion.Find(parametroApp => parametroApp.Parametro.Equals("UrlIntragnoss")).Valor;
 
-                                    capturaCorrecta = contrImg.ObtenerImagenDesdeDescripcion(filaDoc.DocumentoID, filaDoc.Descripcion, urlIntraGnoss, loggingService);
+                                    capturaCorrecta = contrImg.ObtenerImagenDesdeDescripcion(filaDoc.DocumentoID, filaDoc.Descripcion, urlIntraGnoss, loggingService, mConfigService, entityContext);
                                 }
 
                                 //Si no obtenemos imagen de la descripción cogemos la Web completa
@@ -303,7 +308,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     parametroAplicacionGBD.ObtenerConfiguracionGnoss(gestorParametroAplicacion);
                                     string urlIntraGnoss = gestorParametroAplicacion.ParametroAplicacion.Find(parametroApp => parametroApp.Parametro.Equals("UrlIntragnoss")).Valor;
 
-                                    capturaCorrecta = contrImg.ObtenerImagenDesdeDescripcion(filaDoc.DocumentoID, filaDoc.Descripcion, urlIntraGnoss, loggingService);
+                                    capturaCorrecta = contrImg.ObtenerImagenDesdeDescripcion(filaDoc.DocumentoID, filaDoc.Descripcion, urlIntraGnoss, loggingService, mConfigService, entityContext);
                                 }
 
                                 contrImg.Dispose();
@@ -470,7 +475,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                         #region Captura mini Vimeo
 
                                         //Obtengo la Imagen de la URL:
-                                        bool capturaCorrecta = ObtenerImagenUrl(urlServicioImagenes, anchoCap, altoCap, filaDoc, ObtenerUrlImagenVimeo(enlace, idVideo), filaColaDoc, pDataWrapperDocumentacion, entityContext, loggingService);
+                                        bool capturaCorrecta = ObtenerImagenUrl(urlServicioImagenes, anchoCap, altoCap, filaDoc, ObtenerUrlImagenVimeo(enlace, (int)idVideo, entityContext, mConfigService, loggingService), filaColaDoc, pDataWrapperDocumentacion, entityContext, loggingService);
 
 
                                         if (capturaCorrecta)
@@ -798,7 +803,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                             {
                                                 //Vimeo
                                                 mensaje += filaDoc.DocumentoID + "' de tipo Semántico Vimeo se ha procesado";
-                                                urlImagen = ObtenerUrlImagenVimeo(urlImagen, idVideo);
+                                                urlImagen = ObtenerUrlImagenVimeo(urlImagen, idVideo, entityContext, mConfigService, loggingService);
 
                                             }
 
@@ -1204,20 +1209,25 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         /// </summary>
         /// <param name="pUrlVideo">Url del vídeo</param>
         /// <returns>Url de la imagen</returns>
-        private string ObtenerUrlImagenVimeo(string pUrlVideo, long pIdVideo)
+        private string ObtenerUrlImagenVimeo(string pUrlVideo, int pIdVideo, EntityContext pEntityContext, ConfigService pConfigService, LoggingService pLoggingService)
         {
+            ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null);
             string urlImagen = "";
+            string token = paramCN.ObtenerParametroAplicacion("VimeoAccessToken");
 
-            using (XmlTextReader reader = new XmlTextReader("http://vimeo.com/api/v2/video/" + pIdVideo + ".xml"))
+            if (!string.IsNullOrEmpty(token))
             {
-                reader.MoveToContent();
-                reader.ReadStartElement();
-                while (reader.Read())
+                string peticion = $"https://api.vimeo.com/videos/{pIdVideo}/pictures";
+                string response = UtilGeneral.WebRequest("GET", peticion, token, null);
+                string[] campos = response.Split(',');
+
+                for (int i = 0; i < campos.Length; i++)
                 {
-                    //ruta de la imagen
-                    if (reader.NodeType == XmlNodeType.Element && reader.Name == "thumbnail_large")
+                    if (campos[i].Contains("base_link"))
                     {
-                        urlImagen = reader.ReadString();
+                        campos[i] = campos[i].Replace("\"", "");
+                        urlImagen = campos[i].Replace("base_link:", "");
+                        break;
                     }
                 }
             }
