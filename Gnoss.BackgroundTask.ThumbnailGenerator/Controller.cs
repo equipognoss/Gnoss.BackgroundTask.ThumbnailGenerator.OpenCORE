@@ -664,6 +664,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     ParametroGeneral filaParametrosGenerales = paramGeneralCN.ObtenerFilaParametrosGeneralesDeProyecto(filaDoc.ProyectoID.Value);
 
                                     WebRequest requestPic = WebRequest.Create("http://fapi-top.prisasd.com/api/" + filaParametrosGenerales.TOPIDCuenta + "/" + filaDoc.Enlace + "/");
+                                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
                                     WebResponse responsePic = requestPic.GetResponse();
                                     TextReader reader = new StreamReader(responsePic.GetResponseStream());
                                     string jsonTOPString = reader.ReadToEnd();
@@ -1144,7 +1145,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         {
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create(pUrl);
             string pageHtml = "";
-            req.UserAgent = "iamabot";
+            req.UserAgent = UtilWeb.GenerarUserAgent();
             HttpWebResponse resp = null;
             try
             {

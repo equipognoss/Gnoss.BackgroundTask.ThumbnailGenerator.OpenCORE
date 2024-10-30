@@ -38,7 +38,22 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
                 .ConfigureServices((hostContext, services) =>
                 {
                     IConfiguration configuration = hostContext.Configuration;
-                    services.AddScoped(typeof(UtilTelemetry));
+					ILoggerFactory loggerFactory =
+					   LoggerFactory.Create(builder =>
+					   {
+						   builder.AddConfiguration(configuration.GetSection("Logging"));
+						   builder.AddSimpleConsole(options =>
+						   {
+							   options.IncludeScopes = true;
+							   options.SingleLine = true;
+							   options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+							   options.UseUtcTimestamp = true;
+						   });
+					   });
+
+					services.AddSingleton(loggerFactory);
+					AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+					services.AddScoped(typeof(UtilTelemetry));
                     services.AddScoped(typeof(Usuario));
                     services.AddScoped(typeof(UtilPeticion));
 
@@ -48,7 +63,6 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
                     services.AddScoped(typeof(LoggingService));
                     services.AddScoped(typeof(GnossCache));
                     services.AddSingleton<ConfigService>();
-                    services.AddSingleton<ILoggerFactory, LoggerFactory>();
                     services.AddScoped<IServicesUtilVirtuosoAndReplication, ServicesVirtuosoAndBidirectionalReplicationOpen>();
                     services.AddScoped(typeof(RelatedVirtuosoCL));
                     IDictionary environmentVariables = Environment.GetEnvironmentVariables();
@@ -80,7 +94,12 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
                     {
                         bdType = configuration.GetConnectionString("connectionType");
                     }
-                    if (bdType.Equals("0"))
+					if (bdType.Equals("2") || bdType.Equals("1"))
+					{
+						services.AddScoped(typeof(DbContextOptions<EntityContext>));
+						services.AddScoped(typeof(DbContextOptions<EntityContextBASE>));
+					}
+					if (bdType.Equals("0"))
                     {
                         services.AddDbContext<EntityContext>(options =>
                                 options.UseSqlServer(acid)
@@ -90,7 +109,17 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
 
                                 );
                     }
-                    else if (bdType.Equals("2"))
+					else if (bdType.Equals("1"))
+					{
+						services.AddDbContext<EntityContext, EntityContextOracle>(options =>
+								options.UseOracle(acid)
+								);
+						services.AddDbContext<EntityContextBASE, EntityContextBASEOracle>(options =>
+								options.UseOracle(baseConnection)
+
+								);
+					}
+					else if (bdType.Equals("2"))
                     {
                         services.AddEntityFrameworkNpgsql().AddDbContext<EntityContext>(opt =>
                         {

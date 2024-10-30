@@ -259,6 +259,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                 if (!string.IsNullOrEmpty(pURL))
                 {
                     WebRequest requestPic = WebRequest.Create(pURL);
+                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
                     WebResponse responsePic = requestPic.GetResponse();
 
                     Image img = Image.Load(responsePic.GetResponseStream());
@@ -318,6 +319,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                 {
                     #region Imagen
                     WebRequest requestPic = WebRequest.Create(pURL);
+                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
                     WebResponse responsePic = requestPic.GetResponse();
 
                     img = Image.Load(responsePic.GetResponseStream());
@@ -537,6 +539,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                     }
 
                     WebRequest requestPic = WebRequest.Create(fotoactual);
+                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
                     WebResponse responsePic = requestPic.GetResponse();
                     Image img = Image.Load(responsePic.GetResponseStream());
 
