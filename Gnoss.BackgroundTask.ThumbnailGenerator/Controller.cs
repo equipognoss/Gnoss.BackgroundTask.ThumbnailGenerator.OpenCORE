@@ -43,6 +43,9 @@ using Es.Riam.Gnoss.Web.Controles.ServicioImagenesWrapper;
 using Es.Riam.Gnoss.Util.Configuracion;
 using Microsoft.EntityFrameworkCore;
 using Es.Riam.AbstractsOpen;
+using Microsoft.Extensions.Logging;
+using Es.Riam.Gnoss.Elementos.Suscripcion;
+using Es.Riam.Gnoss.CL.ParametrosProyecto;
 
 namespace Es.Riam.Gnoss.ServicioMantenimiento
 {
@@ -71,6 +74,8 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
         private long mEstadoCargaID = -1;
         private int mTareaID = -1;
+        private ILogger mlogger;
+        private ILoggerFactory mLoggerFactory;
 
         /// <summary>
         /// Lista con el tamanio de las caputuras configuradas para cada proyecto.
@@ -83,10 +88,11 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
         #region Constructores
 
-        public Controller(IServiceScopeFactory serviceScope, ConfigService configService)
-            : base(serviceScope, configService)
+        public Controller(IServiceScopeFactory serviceScope, ConfigService configService, ILogger<Controller> logger, ILoggerFactory loggerFactory)
+            : base(serviceScope, configService, logger, loggerFactory)
         {
-
+            mlogger = logger;
+            mLoggerFactory = loggerFactory;
         }
 
         #endregion
@@ -117,7 +123,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                     {
                         ColaDocumento filaColaDocumento = JsonConvert.DeserializeObject<ColaDocumento>(pFila);
 
-                        DocumentacionCN docCN = new DocumentacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                        DocumentacionCN docCN = new DocumentacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<DocumentacionCN>(), mLoggerFactory);
 
                         DataWrapperDocumentacion dataWrapperDocumentacion = docCN.ObtenerDocumentosColaDocumentoRabbitMQ(filaColaDocumento.DocumentoID);
                         dataWrapperDocumentacion.ListaColaDocumento.Add(filaColaDocumento);
@@ -130,7 +136,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                 }
                 catch (Exception ex)
                 {
-                    loggingService.GuardarLog(ex.Message);
+                    loggingService.GuardarLog(ex.Message,mlogger);
                     return true;
                 }
                 finally
@@ -168,7 +174,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                     {
                         if (filaDoc.ProyectoID.HasValue && !mTamanioCapturasProyecto.ContainsKey(filaDoc.ProyectoID.Value))
                         {
-                            ProyectoCL proyectoCL = new ProyectoCL(entityContext, loggingService, redisCacheWrapper, mConfigService, virtuosoAD, servicesUtilVirtuosoAndReplication);
+                            ProyectoCL proyectoCL = new ProyectoCL(entityContext, loggingService, redisCacheWrapper, mConfigService, virtuosoAD, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ProyectoCL>(), mLoggerFactory);
                             Dictionary<string, string> paramsProy = proyectoCL.ObtenerParametrosProyecto(filaDoc.ProyectoID.Value);
                             proyectoCL.Dispose();
 
@@ -180,7 +186,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                             {
                                 mTamanioCapturasProyecto.Add(filaDoc.ProyectoID.Value, null);
 
-                                loggingService.GuardarLog("Aniade proyecto al diccionario");
+                                loggingService.GuardarLog("Aniade proyecto al diccionario",mlogger);
                             }
                         }
 
@@ -208,7 +214,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 mensaje += filaDoc.DocumentoID + "' de tipo Hipervinculo se ha procesado";
 
                                 //Obtengo la Imagen de la URL:
-                                ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService);
+                                ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService, mLoggerFactory.CreateLogger<ControladorImagenes>(), mLoggerFactory);
 
                                 bool capturaCorrecta = false;
                                 bool esPaginaMini = false;
@@ -216,7 +222,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 //Si no es MyGnoss
                                 if (filaDoc.ProyectoID != ProyectoAD.MyGnoss)
                                 {
-                                    ParametroAplicacionCN paramCN = new ParametroAplicacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                                    ParametroAplicacionCN paramCN = new ParametroAplicacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ParametroAplicacionCN>(), mLoggerFactory);
                                     GestorParametroAplicacion gestorParametroAplicacion = new GestorParametroAplicacion();
                                     ParametroAplicacionGBD parametroAplicacionGBD = new ParametroAplicacionGBD(loggingService, entityContext, mConfigService);
                                     parametroAplicacionGBD.ObtenerConfiguracionGnoss(gestorParametroAplicacion);
@@ -281,7 +287,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -295,14 +301,14 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 mensaje += filaDoc.DocumentoID + "' de tipo Nota se ha procesado";
 
                                 //Obtengo la Imagen de la URL:
-                                ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService);
+                                ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService, mLoggerFactory.CreateLogger<ControladorImagenes>(), mLoggerFactory);
 
                                 bool capturaCorrecta = false;
 
                                 //Si no es MyGnoss
                                 if (filaDoc.ProyectoID != ProyectoAD.MyGnoss)
                                 {
-                                    ParametroAplicacionCN paramCN = new ParametroAplicacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                                    ParametroAplicacionCN paramCN = new ParametroAplicacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ParametroAplicacionCN>(), mLoggerFactory);
                                     GestorParametroAplicacion gestorParametroAplicacion = new GestorParametroAplicacion();
                                     ParametroAplicacionGBD parametroAplicacionGBD = new ParametroAplicacionGBD(loggingService, entityContext, mConfigService);
                                     parametroAplicacionGBD.ObtenerConfiguracionGnoss(gestorParametroAplicacion);
@@ -354,7 +360,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -373,7 +379,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     //Es BR de persona:
                                     Guid usuarioID = pDataWrapperDocumentacion.ListaBaseRecursosUsuario.FirstOrDefault(baseRec => baseRec.BaseRecursosID.Equals(baseRecursosID)).UsuarioID;
 
-                                    PersonaCN personaCN = new PersonaCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                                    PersonaCN personaCN = new PersonaCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<PersonaCN>(), mLoggerFactory);
                                     DataWrapperPersona personaDW = personaCN.ObtenerPersonaPorUsuario(usuarioID, false, false);
                                     personaCN.Dispose();
 
@@ -386,7 +392,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 }
 
                                 //Obtengo la mini-imagen para la ficha reducid:
-                                ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService);
+                                ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService, mLoggerFactory.CreateLogger<ControladorImagenes>(), mLoggerFactory);
 
                                 string extension = ".jpg";
                                 if (filaDoc.NombreElementoVinculado == "Wiki2")
@@ -424,7 +430,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -537,7 +543,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -572,7 +578,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }//Ya ha sido procesado el video o hace mas de dos dias q existe
@@ -590,7 +596,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
                                     #region Obtengo la Url de la imagen
 
-                                    ParametroGeneralCN paramGeneralCN = new ParametroGeneralCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                                    ParametroGeneralCN paramGeneralCN = new ParametroGeneralCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ParametroGeneralCN>(), mLoggerFactory);
                                     ParametroGeneral filaParametrosGenerales = paramGeneralCN.ObtenerFilaParametrosGeneralesDeProyecto(filaDoc.ProyectoID.Value);
 
                                     string tokenLectura = filaParametrosGenerales.BrightcoveTokenRead;
@@ -629,7 +635,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     AgregarEstadoErrorAElementoCola(filaColaDoc);
                                     mensaje += " SIN exito con fallo.";
 
-                                    loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                    loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                                 }
                                 #endregion
                             }
@@ -660,7 +666,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
                                     #region Obtengo la Url de la imagen
 
-                                    ParametroGeneralCN paramGeneralCN = new ParametroGeneralCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                                    ParametroGeneralCN paramGeneralCN = new ParametroGeneralCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ParametroGeneralCN>(), mLoggerFactory);
                                     ParametroGeneral filaParametrosGenerales = paramGeneralCN.ObtenerFilaParametrosGeneralesDeProyecto(filaDoc.ProyectoID.Value);
 
                                     WebRequest requestPic = WebRequest.Create("http://fapi-top.prisasd.com/api/" + filaParametrosGenerales.TOPIDCuenta + "/" + filaDoc.Enlace + "/");
@@ -705,7 +711,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     AgregarEstadoErrorAElementoCola(filaColaDoc);
                                     mensaje += " SIN exito con fallo.";
 
-                                    loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                    loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                                 }
                                 #endregion
                             }
@@ -841,7 +847,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                             tamaniosImagenesInt.Add(anchoCap);
                                         }
 
-                                        ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService);
+                                        ControladorImagenes contrImg = new ControladorImagenes(urlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, anchoCap, altoCap, ScopedFactory, mConfigService, mLoggerFactory.CreateLogger<ControladorImagenes>(), mLoggerFactory);
                                         bool capturaConExito = contrImg.ObtenerImagenSemanticaDesdeURLAImagen(filaDoc.DocumentoID, urlImagen, tamaniosImagenesInt, nuevaRutaDestino, mFileNameCExtension, mFileName, loggingService);
                                         contrImg.Dispose();
 
@@ -880,7 +886,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
 
                             #endregion
@@ -900,28 +906,28 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                         EliminarFilaColaDocumento(pDataWrapperDocumentacion, filaColaDoc, entityContext);
                     }
 
-                    DocumentacionCN docCN = new DocumentacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                    DocumentacionCN docCN = new DocumentacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<DocumentacionCN>(), mLoggerFactory);
                     docCN.ActualizarDocumentacion();
                     docCN.Dispose();
 
                     if (filaDoc != null && filaDoc.ProyectoID.HasValue)
                     {
-                        DocumentacionCL docCL = new DocumentacionCL(mFicheroConfiguracionBD, "recursos", entityContext, loggingService, redisCacheWrapper, mConfigService, servicesUtilVirtuosoAndReplication);
+                        DocumentacionCL docCL = new DocumentacionCL(mFicheroConfiguracionBD, "recursos", entityContext, loggingService, redisCacheWrapper, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<DocumentacionCL>(), mLoggerFactory);
                         docCL.InvalidarFichaRecursoMVC(filaDoc.DocumentoID, filaDoc.ProyectoID.Value);
                     }
 
-                    loggingService.GuardarLog(mensaje);
+                    loggingService.GuardarLog(mensaje, mlogger);
                 }
             }
             catch (Exception ex)
             {
-                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                loggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
             }
         }
 
         private bool ObtenerImagenUrl(string pUrlServicioImagenes, int pAnchoCap, int pAltoCap, AD.EntityModel.Models.Documentacion.Documento pDocumento, string pEnlace, ColaDocumento pColaDocumento, DataWrapperDocumentacion pDataWrapperDocumentacion, EntityContext entityContext, LoggingService loggingService)
         {
-            ControladorImagenes contrImg = new ControladorImagenes(pUrlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, pAnchoCap, pAltoCap, ScopedFactory, mConfigService);
+            ControladorImagenes contrImg = new ControladorImagenes(pUrlServicioImagenes, TIEMPOCAPTURAURL_SEGUNDOS, mFicheroConfiguracionBD_Controller, pAnchoCap, pAltoCap, ScopedFactory, mConfigService, mLoggerFactory.CreateLogger<ControladorImagenes>(), mLoggerFactory);
             bool capturaCorrecta = contrImg.ObtenerImagenDesdeURLAImagen(pDocumento.DocumentoID, pEnlace, loggingService);
 
             contrImg.Dispose();
@@ -968,7 +974,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                 RabbitMQClient.ReceivedDelegate funcionProcesarItem = new RabbitMQClient.ReceivedDelegate(ProcesarItem);
                 RabbitMQClient.ShutDownDelegate funcionShutDown = new RabbitMQClient.ShutDownDelegate(OnShutDown);
 
-                RabbitMQClient rabbitMQClient = new RabbitMQClient(RabbitMQClient.BD_SERVICIOS_WIN, "ColaMiniatura", loggingService, mConfigService, "", "ColaMiniatura");
+                RabbitMQClient rabbitMQClient = new RabbitMQClient(RabbitMQClient.BD_SERVICIOS_WIN, "ColaMiniatura", loggingService, mConfigService, mLoggerFactory.CreateLogger<RabbitMQClient>(), mLoggerFactory, "", "ColaMiniatura");
 
                 try
                 {
@@ -978,7 +984,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                 catch (Exception ex)
                 {
                     mReiniciarLecturaRabbit = true;
-                    loggingService.GuardarLogError(ex);
+                    loggingService.GuardarLogError(ex, mlogger);
                 }
             }
         }
@@ -1020,7 +1026,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         private void PartirImagenOpenSeaDragon(string pRutaImagen, string pRutaGuardar, string pUrlServicioImagenes, LoggingService loggingService)
         {
             string extension = pRutaImagen.Substring(pRutaImagen.LastIndexOf("."));
-            ServicioImagenes servicioImagenes = new ServicioImagenes(loggingService, mConfigService);
+            ServicioImagenes servicioImagenes = new ServicioImagenes(loggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
             servicioImagenes.Url = pUrlServicioImagenes;
             string urlObtServ = pRutaImagen.ToLower().Replace("imagenes/", "");
             urlObtServ = urlObtServ.Substring(0, urlObtServ.LastIndexOf("."));
@@ -1163,7 +1169,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             }
             catch (Exception ex)
             {
-                loggingService.GuardarLog("ERROR en la obtención de la cabecera:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                loggingService.GuardarLog("ERROR en la obtención de la cabecera:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
             }
             finally
             {
@@ -1212,7 +1218,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         /// <returns>Url de la imagen</returns>
         private string ObtenerUrlImagenVimeo(string pUrlVideo, int pIdVideo, EntityContext pEntityContext, ConfigService pConfigService, LoggingService pLoggingService)
         {
-            ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null);
+            ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null, mLoggerFactory.CreateLogger<ParametroAplicacionCN>(), mLoggerFactory);
             string urlImagen = "";
             string token = paramCN.ObtenerParametroAplicacion("VimeoAccessToken");
 
@@ -1262,7 +1268,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             }
             catch (Exception ex)
             {
-                loggingService.GuardarLogError(ex);
+                loggingService.GuardarLogError(ex, mlogger);
             }
 
             //Corregimos el final de la URL
@@ -1275,7 +1281,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             //this.GuardarLog(xmlDownloaded);
 
             // Guardar la rutaImagen en algún Log
-            loggingService.GuardarLog(rutaImagen);
+            loggingService.GuardarLog(rutaImagen, mlogger);
 
             return rutaImagen;
         }
@@ -1340,7 +1346,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
         protected override ControladorServicioGnoss ClonarControlador()
         {
-            return new Controller(ScopedFactory, mConfigService);
+            return new Controller(ScopedFactory, mConfigService, mLoggerFactory.CreateLogger<Controller>(), mLoggerFactory);
         }
 
         #endregion
@@ -1350,7 +1356,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         {
             if (mListaUrlServiciosIntragnossPorProyecto == null)
             {
-                ParametroCN paramCN = new ParametroCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication);
+                ParametroCN paramCN = new ParametroCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ParametroCN>(), mLoggerFactory);
                 mListaUrlServiciosIntragnossPorProyecto = paramCN.ObtenerParametroDeProyectos(TiposParametrosAplicacion.UrlIntragnossServicios);
             }
             return mListaUrlServiciosIntragnossPorProyecto;

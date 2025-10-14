@@ -8,6 +8,8 @@ using Es.Riam.Gnoss.Servicios;
 using Es.Riam.Gnoss.Util.Configuracion;
 using Es.Riam.Gnoss.Util.General;
 using Es.Riam.Gnoss.Util.Seguridad;
+using Es.Riam.Interfaces.InterfacesOpen;
+using Es.Riam.Open;
 using Es.Riam.OpenReplication;
 using Es.Riam.Util;
 using Microsoft.EntityFrameworkCore;
@@ -65,6 +67,7 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
                     services.AddSingleton<ConfigService>();
                     services.AddScoped<IServicesUtilVirtuosoAndReplication, ServicesVirtuosoAndBidirectionalReplicationOpen>();
                     services.AddScoped(typeof(RelatedVirtuosoCL));
+                    services.AddScoped<IAvailableServices, AvailableServicesOpen>();
                     IDictionary environmentVariables = Environment.GetEnvironmentVariables();
 
                     string acid = "";
@@ -102,10 +105,10 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
 					if (bdType.Equals("0"))
                     {
                         services.AddDbContext<EntityContext>(options =>
-                                options.UseSqlServer(acid)
+                                options.UseSqlServer(acid, o => o.UseCompatibilityLevel(110))
                                 );
                         services.AddDbContext<EntityContextBASE>(options =>
-                                options.UseSqlServer(baseConnection)
+                                options.UseSqlServer(baseConnection, o => o.UseCompatibilityLevel(110))
 
                                 );
                     }

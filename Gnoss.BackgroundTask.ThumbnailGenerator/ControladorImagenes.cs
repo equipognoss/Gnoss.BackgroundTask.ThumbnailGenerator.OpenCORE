@@ -17,6 +17,11 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Processing;
 using Es.Riam.Gnoss.AD.EntityModel;
+using BeetleX.Buffers;
+using Es.Riam.Gnoss.Web.MVC.Models.Tesauro;
+using SixLabors.ImageSharp.Memory;
+using Microsoft.Extensions.Logging;
+using Es.Riam.Gnoss.Elementos.Suscripcion;
 
 namespace Es.Riam.Gnoss.ProcesadoTareas
 {
@@ -81,6 +86,8 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         /// Máximo tamanio para las mini-imágenes generadas.
         /// </summary>
         public int MAX_SIZE_IMG;
+        private ILogger mlogger;
+        private ILoggerFactory mLoggerFactory;
 
         #region Miembros estáticos
 
@@ -117,11 +124,13 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         /// <param name="pTiempoCapturaURL">Tiempo de espera para la captura de la web (en segundos)</param>
         /// <param name="pAnchoCap">Ancho para las capturas</param>
         /// <param name="pAltoCap">Alto para las capturas</param>
-        public ControladorImagenes(string pURLServicioImagenes, int pTiempoCapturaURL, string pFicheroConfiguracionBD, int pAnchoCap, int pAltoCap, IServiceScopeFactory scopeFactory, ConfigService configService)
-            : this(pFicheroConfiguracionBD, pAnchoCap, pAltoCap, scopeFactory, configService)
+        public ControladorImagenes(string pURLServicioImagenes, int pTiempoCapturaURL, string pFicheroConfiguracionBD, int pAnchoCap, int pAltoCap, IServiceScopeFactory scopeFactory, ConfigService configService, ILogger<ControladorImagenes> logger, ILoggerFactory loggerFactory)
+            : this(pFicheroConfiguracionBD, pAnchoCap, pAltoCap, scopeFactory, configService,logger,loggerFactory)
         {
             mURLServicioImagenes = pURLServicioImagenes;
             mTiempoCapturaURL = pTiempoCapturaURL * 1000;
+            mlogger = logger;
+            mLoggerFactory = loggerFactory;
         }
 
         /// <summary>
@@ -130,12 +139,14 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         /// <param name="pURLServicioImagenes">URL del servicio de imágenes</param>
         /// <param name="pAnchoCap">Ancho para las capturas</param>
         /// <param name="pAltoCap">Alto para las capturas</param>
-        public ControladorImagenes(string pFicheroConfiguracionBD, int pAnchoCap, int pAltoCap, IServiceScopeFactory scopedFactory, ConfigService configService)
-            : base(scopedFactory, configService)
+        public ControladorImagenes(string pFicheroConfiguracionBD, int pAnchoCap, int pAltoCap, IServiceScopeFactory scopedFactory, ConfigService configService, ILogger<ControladorImagenes> logger, ILoggerFactory loggerFactory)
+            : base(scopedFactory, configService,logger,loggerFactory)
         {
             ThumbWidthImg = pAnchoCap;
             MAX_SIZE_IMG = pAnchoCap;
             ThumbHeightImg = pAltoCap;
+            mlogger = logger;
+            mLoggerFactory = loggerFactory;
         }
         #endregion
 
@@ -154,7 +165,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         public bool ObtenerImagenMiniaturaDocumento(Guid pDocumentoID, Guid pPersonaID, Guid pOrganizacionID, string pExtension, LoggingService pLoggingService)
         {
             //Inicializo el servicio de imágenes:
-            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
             mServicioImagenes.Url = mURLServicioImagenes;
 
             string nombreImagen = pDocumentoID.ToString();
@@ -247,7 +258,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         public bool ObtenerImagenDesdeURLAImagen(Guid pDocumentoID, string pURL, LoggingService pLoggingService)
         {
             //Inicializo el servicio de imágenes:
-            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
             mServicioImagenes.Url = mURLServicioImagenes;
 
             AbsolutePath = "../" + UtilArchivos.ContentImagenesEnlaces + "/" + UtilArchivos.DirectorioDocumento(pDocumentoID);
@@ -294,12 +305,12 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                 }
                 else
                 {
-                    pLoggingService.GuardarLog("ERROR: imagenUrl null or empty '" + pURL + "'");
+                    pLoggingService.GuardarLog("ERROR: imagenUrl null or empty '" + pURL + "'",mlogger);
                 }
             }
             catch (Exception ex)
             {
-                pLoggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                pLoggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace,mlogger);
             }
 
             return mCapturaRealizada;
@@ -307,7 +318,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
 
         public bool ObtenerImagenSemanticaDesdeURLAImagen(Guid pDocumentoID, string pURL, List<int> pTamaniosImagenesInt, string pNuevaRutaDestino, string pFileNameCExtension, string pFileName, LoggingService pLoggingService)
         {
-            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
             mServicioImagenes.Url = mURLServicioImagenes;
             mCapturaRealizada = false;
 
@@ -347,7 +358,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                 {
                     // Guardar la imagen sin redimensionar con nombre filaDoc.DocumentoID.ToString() en rutaDestino
                     byte[] imagenArray = null;
-                    mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
+                    mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
                     mServicioImagenes.Url = mURLServicioImagenes;
                     MemoryStream ms = new MemoryStream();
                     img.SaveAsJpeg(ms);
@@ -367,7 +378,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                     foreach (int anchoImagenesInt in pTamaniosImagenesInt)
                     {
                         // Guardar imagen redimensionada en rutaDestino
-                        mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
+                        mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
                         mServicioImagenes.Url = mURLServicioImagenes;
                         ms = new MemoryStream();
 
@@ -403,7 +414,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
             }
             catch (Exception ex)
             {
-                pLoggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace);
+                pLoggingService.GuardarLog("ERROR:  Excepción: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
             }
 
             return mCapturaRealizada;
@@ -415,7 +426,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         public bool ObtenerImagenDesdeDescripcion(Guid pDocumentoID, string pDescripcion, string pUrlIntraGnoss, LoggingService pLoggingService, ConfigService pConfigService, EntityContext pEntityContext)
         {
             //Inicializo el servicio de imágenes:
-            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService);
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
             mServicioImagenes.Url = mURLServicioImagenes;
 
             AbsolutePath = "../" + UtilArchivos.ContentImagenesEnlaces + "/" + UtilArchivos.DirectorioDocumento(pDocumentoID);
@@ -583,7 +594,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                 }
                 catch (Exception ex)
                 {
-                    pLoggingService.GuardarLog(ex.Message);
+                    pLoggingService.GuardarLog(ex.Message, mlogger);
                 }
             }
 
@@ -599,7 +610,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
         /// <returns>Url de la imagen</returns>
         private string ObtenerUrlImagenVimeo(string pUrlVideo, int pIdVideo, EntityContext pEntityContext, ConfigService pConfigService, LoggingService pLoggingService)
         {
-            ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null);
+            ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null, mLoggerFactory.CreateLogger<ParametroAplicacionCN>(), mLoggerFactory);
             string urlImagen = "";
             string token = paramCN.ObtenerParametroAplicacion("VimeoAccessToken");
 
@@ -651,9 +662,78 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
             }
         }
 
+        public void GenerarImagenesCategoria(ColaImagenCategoria pElementoColaImagenCategoria, LoggingService pLoggingService)
+        {
+            string ruta = $"{UtilArchivos.ContentImagenesCategorias}/{pElementoColaImagenCategoria.ProyectoID.ToString().ToLower()}/{pElementoColaImagenCategoria.CategoriaID.ToString().ToLower()}";
+            string nombreImagenConRuta = $"{ruta}/{Path.GetFileNameWithoutExtension(pElementoColaImagenCategoria.NombreImagenOriginal)}";
+            mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
+            mServicioImagenes.Url = mURLServicioImagenes;
+            byte[] buffer = mServicioImagenes.ObtenerImagen(nombreImagenConRuta, Path.GetExtension(pElementoColaImagenCategoria.NombreImagenOriginal));
+            
+            if (buffer != null)
+            {
+                List<int> medidasGenerar = new List<int>() { MAX_SIZE_IMG, 120, 240, 360, 480 };
+
+                foreach (int medida in medidasGenerar)
+                {
+                    GenerarImagenCategoriaEnTamanio(buffer, medida, ruta, pElementoColaImagenCategoria.CategoriaID.ToString().ToLower());
+                }
+
+                mServicioImagenes.BorrarImagenDeDirectorio($"{ruta}/{pElementoColaImagenCategoria.NombreImagenOriginal}");
+            }
+
+        }
+
+        private void GenerarImagenCategoriaEnTamanio(byte[] pBytesImagen, int pTamanio, string pRutaImagen, string pNombre)
+        {
+            byte[] buffer = null;
+            MemoryStream streamImagen = new MemoryStream(pBytesImagen);
+            Image imagenOriginal = Image.Load(streamImagen);
+
+            int ancho = imagenOriginal.Width;
+            int alto = imagenOriginal.Height;
+
+            int nuevoAncho = 0;
+            int nuevoAlto = 0;
+
+            // Redimensionamos al tamaño indicado por su lado mayor
+            if (ancho == alto)
+            {
+                nuevoAlto = pTamanio;
+                nuevoAncho = pTamanio;
+            }
+            else if (ancho > alto)
+            {
+                nuevoAncho = pTamanio;
+                nuevoAlto = (nuevoAncho * alto) / ancho;
+            }
+            else
+            {
+                nuevoAlto = pTamanio;
+                nuevoAncho = (nuevoAlto * ancho) / alto;
+            }
+
+            imagenOriginal.Mutate(x => x.Resize(nuevoAncho, nuevoAlto));
+            using (var ms = new MemoryStream())
+            {
+                imagenOriginal.Save(ms, PngFormat.Instance);
+                buffer = ms.ToArray();
+            }
+
+            string nombreImagen = pNombre;
+            if (pTamanio != MAX_SIZE_IMG)
+            {
+                nombreImagen = $"{pNombre}_{pTamanio}";
+            }
+            mServicioImagenes.AgregarFichero(buffer, nombreImagen, ".png", pRutaImagen);
+
+            imagenOriginal.Dispose();
+            streamImagen.Dispose();
+        }
+
         protected override ControladorServicioGnoss ClonarControlador()
         {
-            return new ControladorImagenes(mFicheroConfiguracionBDOriginal, ThumbWidthImg, ThumbHeightImg, ScopedFactory, mConfigService);
+            return new ControladorImagenes(mFicheroConfiguracionBDOriginal, ThumbWidthImg, ThumbHeightImg, ScopedFactory, mConfigService, mLoggerFactory.CreateLogger<ControladorImagenes>(), mLoggerFactory);
         }
 
         #endregion
