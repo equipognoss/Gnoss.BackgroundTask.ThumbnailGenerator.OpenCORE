@@ -102,42 +102,20 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
 						services.AddScoped(typeof(DbContextOptions<EntityContext>));
 						services.AddScoped(typeof(DbContextOptions<EntityContextBASE>));
 					}
-					if (bdType.Equals("0"))
+                    if (bdType.Equals("0"))
                     {
-                        services.AddDbContext<EntityContext>(options =>
-                                options.UseSqlServer(acid, o => o.UseCompatibilityLevel(110))
-                                );
-                        services.AddDbContext<EntityContextBASE>(options =>
-                                options.UseSqlServer(baseConnection, o => o.UseCompatibilityLevel(110))
-
-                                );
+                        services.AddDbContext<EntityContext>();
+                        services.AddDbContext<EntityContextBASE>();
                     }
-					else if (bdType.Equals("1"))
-					{
-						services.AddDbContext<EntityContext, EntityContextOracle>(options =>
-								options.UseOracle(acid)
-								);
-						services.AddDbContext<EntityContextBASE, EntityContextBASEOracle>(options =>
-								options.UseOracle(baseConnection)
-
-								);
-					}
-					else if (bdType.Equals("2"))
+                    else if (bdType.Equals("1"))
                     {
-                        services.AddEntityFrameworkNpgsql().AddDbContext<EntityContext>(opt =>
-                        {
-                            var builder = new NpgsqlDbContextOptionsBuilder(opt);
-                            builder.SetPostgresVersion(new Version(9, 6));
-                            opt.UseNpgsql(acid);
-
-                        });
-                        services.AddEntityFrameworkNpgsql().AddDbContext<EntityContextBASE>(opt =>
-                        {
-                            var builder = new NpgsqlDbContextOptionsBuilder(opt);
-                            builder.SetPostgresVersion(new Version(9, 6));
-                            opt.UseNpgsql(baseConnection);
-
-                        });
+                        services.AddDbContext<EntityContext, EntityContextOracle>();
+                        services.AddDbContext<EntityContextBASE, EntityContextBASEOracle>();
+                    }
+                    else if (bdType.Equals("2"))
+                    {
+                        services.AddEntityFrameworkNpgsql().AddDbContext<EntityContext>();
+                        services.AddEntityFrameworkNpgsql().AddDbContext<EntityContextBASE>();
                     }
                     services.AddHostedService<ThumbnailGeneratorWorker>();
                 });
