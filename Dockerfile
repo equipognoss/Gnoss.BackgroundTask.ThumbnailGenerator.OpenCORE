@@ -9,13 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl
 
 WORKDIR /app
 
-COPY Gnoss.BackgroundTask.ThumbnailGenerator/*.csproj ./
-
-RUN dotnet restore
-
 COPY . ./
 
-RUN dotnet publish Gnoss.BackgroundTask.ThumbnailGenerator/Gnoss.BackgroundTask.ThumbnailGenerator.csproj -c Release -o out
+RUN dotnet restore Gnoss.BackgroundTask.ThumbnailGenerator.OpenCORE/Gnoss.BackgroundTask.ThumbnailGenerator/Gnoss.BackgroundTask.ThumbnailGenerator.csproj
+
+RUN dotnet publish Gnoss.BackgroundTask.ThumbnailGenerator.OpenCORE/Gnoss.BackgroundTask.ThumbnailGenerator/Gnoss.BackgroundTask.ThumbnailGenerator.csproj -c Release -o out
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 
