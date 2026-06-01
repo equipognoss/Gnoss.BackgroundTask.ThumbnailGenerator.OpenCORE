@@ -1,18 +1,21 @@
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.IO;
-using System.Net;
-using System.Text;
-using System.Threading;
-using System.Xml;
+using Es.Riam.AbstractsOpen;
 using Es.Riam.Gnoss.AD.Documentacion;
+using Es.Riam.Gnoss.AD.EncapsuladoDatos;
+using Es.Riam.Gnoss.AD.EntityModel;
+using Es.Riam.Gnoss.AD.EntityModel.Models.Documentacion;
+using Es.Riam.Gnoss.AD.EntityModel.Models.ParametroGeneralDS;
+using Es.Riam.Gnoss.AD.EntityModelBASE;
 using Es.Riam.Gnoss.AD.Parametro;
 using Es.Riam.Gnoss.AD.ParametroAplicacion;
 using Es.Riam.Gnoss.AD.ServiciosGenerales;
+using Es.Riam.Gnoss.AD.Virtuoso;
+using Es.Riam.Gnoss.CL;
 using Es.Riam.Gnoss.CL.Documentacion;
+using Es.Riam.Gnoss.CL.ParametrosProyecto;
 using Es.Riam.Gnoss.CL.ServiciosGenerales;
 using Es.Riam.Gnoss.Elementos.Documentacion;
+using Es.Riam.Gnoss.Elementos.ParametroAplicacion;
+using Es.Riam.Gnoss.Elementos.Suscripcion;
 using Es.Riam.Gnoss.Logica.BASE_BD;
 using Es.Riam.Gnoss.Logica.Documentacion;
 using Es.Riam.Gnoss.Logica.Parametro;
@@ -20,32 +23,30 @@ using Es.Riam.Gnoss.Logica.ParametroAplicacion;
 using Es.Riam.Gnoss.Logica.ParametrosProyecto;
 using Es.Riam.Gnoss.Logica.ServiciosGenerales;
 using Es.Riam.Gnoss.ProcesadoTareas;
-using Es.Riam.Gnoss.Servicios;
-using Es.Riam.Gnoss.Web.MVC.Models;
-using Es.Riam.Gnoss.AD.EntityModel;
-using System.Linq;
-using Es.Riam.Gnoss.Elementos.ParametroAplicacion;
-
-using Es.Riam.Gnoss.AD.EntityModel.Models.ParametroGeneralDS;
-using Es.Riam.Gnoss.Web.Controles.ParametroAplicacionGBD;
-using Es.Riam.Gnoss.AD.EncapsuladoDatos;
 using Es.Riam.Gnoss.RabbitMQ;
-using Es.Riam.Util;
-using Es.Riam.Gnoss.Util.General;
-using Newtonsoft.Json;
 using Es.Riam.Gnoss.Recursos;
-using Es.Riam.Gnoss.AD.EntityModel.Models.Documentacion;
-using Es.Riam.Gnoss.AD.EntityModelBASE;
-using Es.Riam.Gnoss.AD.Virtuoso;
-using Es.Riam.Gnoss.CL;
-using Microsoft.Extensions.DependencyInjection;
-using Es.Riam.Gnoss.Web.Controles.ServicioImagenesWrapper;
+using Es.Riam.Gnoss.Servicios;
 using Es.Riam.Gnoss.Util.Configuracion;
+using Es.Riam.Gnoss.Util.General;
+using Es.Riam.Gnoss.Web.Controles.ParametroAplicacionGBD;
+using Es.Riam.Gnoss.Web.Controles.ServicioImagenesWrapper;
+using Es.Riam.Gnoss.Web.MVC.Models;
+using Es.Riam.Util;
 using Microsoft.EntityFrameworkCore;
-using Es.Riam.AbstractsOpen;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Es.Riam.Gnoss.Elementos.Suscripcion;
-using Es.Riam.Gnoss.CL.ParametrosProyecto;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Xml;
 
 namespace Es.Riam.Gnoss.ServicioMantenimiento
 {
@@ -1218,7 +1219,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         /// <returns>Url de la imagen</returns>
         private string ObtenerUrlImagenVimeo(string pUrlVideo, int pIdVideo, EntityContext pEntityContext, ConfigService pConfigService, LoggingService pLoggingService)
         {
-            ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null, mLoggerFactory.CreateLogger<ParametroAplicacionCN>(), mLoggerFactory);
+            using ParametroAplicacionCN paramCN = new ParametroAplicacionCN(pEntityContext, pLoggingService, pConfigService, null, mLoggerFactory.CreateLogger<ParametroAplicacionCN>(), mLoggerFactory);
             string urlImagen = "";
             string token = paramCN.ObtenerParametroAplicacion("VimeoAccessToken");
 
@@ -1252,19 +1253,21 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             string rutaImagen = "";
 
             string enlaceSlideshare = pUrlVideo;
-            if (enlaceSlideshare.Contains("?"))
+            if (enlaceSlideshare.Contains('?'))
             {
                 enlaceSlideshare = enlaceSlideshare.Substring(0, enlaceSlideshare.IndexOf("?"));
             }
 
-            string ruta = "https://www.slideshare.net/api/oembed/2?url=" + enlaceSlideshare;
-
             try
             {
-                XmlDocument docXml = new XmlDocument();
-                docXml.Load(ruta);
-
-                rutaImagen = docXml.SelectSingleNode("oembed/thumbnail-url").InnerText;
+                using HttpClient httpClient = new HttpClient();
+                using HttpResponseMessage response = httpClient.Send(new HttpRequestMessage(HttpMethod.Get, enlaceSlideshare));
+                string html = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                Match match = Regex.Match(html, @"<meta[^>]*property=""og:image""[^>]*content=""([^""]+)""");
+                if (match.Success)
+                {
+                    rutaImagen = match.Groups[1].Value;
+                }
             }
             catch (Exception ex)
             {
@@ -1276,12 +1279,6 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             {
                 rutaImagen = LimpiarParametrosUrl(rutaImagen);
             }
-
-            //// Guardar el XML descargado en algún Log
-            //this.GuardarLog(xmlDownloaded);
-
-            // Guardar la rutaImagen en algún Log
-            loggingService.GuardarLog(rutaImagen, mlogger);
 
             return rutaImagen;
         }
