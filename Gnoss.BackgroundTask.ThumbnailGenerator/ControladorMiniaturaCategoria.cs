@@ -1,52 +1,39 @@
 ﻿using Es.Riam.AbstractsOpen;
 using Es.Riam.Gnoss.AD.EncapsuladoDatos;
-using Es.Riam.Gnoss.AD.EntityModel.Models.Documentacion;
 using Es.Riam.Gnoss.AD.EntityModel;
 using Es.Riam.Gnoss.AD.Virtuoso;
 using Es.Riam.Gnoss.CL;
-using Es.Riam.Gnoss.Logica.Documentacion;
 using Es.Riam.Gnoss.RabbitMQ;
 using Es.Riam.Gnoss.Recursos;
 using Es.Riam.Gnoss.Servicios;
 using Es.Riam.Gnoss.Util.Configuracion;
 using Es.Riam.Gnoss.Util.General;
 using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Es.Riam.Gnoss.AD.EntityModelBASE;
 using Es.Riam.Gnoss.Web.MVC.Models.Tesauro;
-using Es.Riam.Gnoss.Web.Controles.ServicioImagenesWrapper;
-using Es.Riam.Util;
-using BeetleX.Buffers;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Processing;
-using System.IO;
 using Es.Riam.Gnoss.ProcesadoTareas;
 using Es.Riam.Gnoss.Elementos.Tesauro;
 using Microsoft.Extensions.Logging;
-using Es.Riam.Gnoss.Elementos.Suscripcion;
+using System.Text.Json;
 
 namespace Gnoss.BackgroundTask.ThumbnailGenerator
 {
 	internal class ControladorMiniaturaCategoria : ControladorServicioGnoss
 	{
-        private ILogger mlogger;
-        private ILoggerFactory mLoggerFactory;
+        private readonly ILogger mlogger;
+        private readonly ILoggerFactory mLoggerFactory;
+        private RabbitMQClient mRabbitMQClient;
         public ControladorMiniaturaCategoria(IServiceScopeFactory serviceScope, ConfigService configService, ILogger<ControladorMiniaturaCategoria> logger, ILoggerFactory loggerFactory)
 			: base(serviceScope, configService,logger,loggerFactory)
 		{
             mlogger = logger;
             mLoggerFactory = loggerFactory;
         }
-        public override void RealizarMantenimiento(EntityContext entityContext, EntityContextBASE entityContextBASE, UtilidadesVirtuoso utilidadesVirtuoso, LoggingService loggingService, RedisCacheWrapper redisCacheWrapper, GnossCache gnossCache, VirtuosoAD virtuosoAD, IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication)
+        public override void RealizarMantenimiento(EntityContext entityContext, EntityContextBASE entityContextBASE, UtilidadesVirtuoso utilidadesVirtuoso, LoggingService loggingService, RedisCacheWrapper redisCacheWrapper, GnossCache gnossCache, IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication)
         {
             #region Establezco el dominio de la cache
 
-            //mDominio = ((ParametroAplicacionDS.ParametroAplicacionRow)ParametroAplicacionDS.ParametroAplicacion.Select("Parametro='UrlIntragnoss'")[0]).Valor;
             mDominio = GestorParametroAplicacionDS.ParametroAplicacion.Find(parametroApp => parametroApp.Parametro.Equals("UrlIntragnoss")).Valor;
             mDominio = mDominio.Replace("http://", "").Replace("www.", "");
 
@@ -65,11 +52,12 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
 			{
 				RabbitMQClient.ReceivedDelegate funcionProcesarItem = new RabbitMQClient.ReceivedDelegate(ProcesarItem);
 				RabbitMQClient.ShutDownDelegate funcionShutDown = new RabbitMQClient.ShutDownDelegate(OnShutDown);
-				RabbitMQClient rabbitMQClient = new RabbitMQClient(RabbitMQClient.BD_SERVICIOS_WIN, "ColaMiniaturaCategoria", loggingService, mConfigService, mLoggerFactory.CreateLogger<RabbitMQClient>(), mLoggerFactory, "", "ColaMiniaturaCategoria");
+				mRabbitMQClient?.Dispose();
+				mRabbitMQClient = new RabbitMQClient(RabbitMQClient.BD_SERVICIOS_WIN, "ColaMiniaturaCategoria", loggingService, mConfigService, mLoggerFactory.CreateLogger<RabbitMQClient>(), mLoggerFactory, "", "ColaMiniaturaCategoria");
 
 				try
 				{
-					rabbitMQClient.ObtenerElementosDeCola(funcionProcesarItem, funcionShutDown);
+					mRabbitMQClient.ObtenerElementosDeCola(funcionProcesarItem, funcionShutDown);
 					mReiniciarLecturaRabbit = false;
 				}
 				catch (Exception ex)
@@ -86,7 +74,6 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
 			{
 				EntityContext entityContext = scope.ServiceProvider.GetRequiredService<EntityContext>();
 				LoggingService loggingService = scope.ServiceProvider.GetRequiredService<LoggingService>();
-				VirtuosoAD virtuosoAD = scope.ServiceProvider.GetRequiredService<VirtuosoAD>();
 				RedisCacheWrapper redisCacheWrapper = scope.ServiceProvider.GetRequiredService<RedisCacheWrapper>();
 				ConfigService configService = scope.ServiceProvider.GetRequiredService<ConfigService>();
 				IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication = scope.ServiceProvider.GetRequiredService<IServicesUtilVirtuosoAndReplication>();
@@ -100,8 +87,8 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
 
 					if (!string.IsNullOrEmpty(pFila))
 					{
-						ColaImagenCategoria elementoColaImagenCategoria = JsonConvert.DeserializeObject<ColaImagenCategoria>(pFila);
-						ProcesarFilaColaImagenCategoria(elementoColaImagenCategoria, entityContext, loggingService, redisCacheWrapper, virtuosoAD, servicesUtilVirtuosoAndReplication, configService);
+						ColaImagenCategoria elementoColaImagenCategoria = JsonSerializer.Deserialize<ColaImagenCategoria>(pFila);
+						ProcesarFilaColaImagenCategoria(elementoColaImagenCategoria, entityContext, loggingService, configService);
 
 						ControladorConexiones.CerrarConexiones(false);
 					} 
@@ -119,7 +106,7 @@ namespace Gnoss.BackgroundTask.ThumbnailGenerator
 			}
 		}
 
-		private void ProcesarFilaColaImagenCategoria(ColaImagenCategoria pElementoColaImagenCategoria, EntityContext pEntityContext, LoggingService pLoggingService, RedisCacheWrapper pRedisCacheWrapper, VirtuosoAD pVirtuosoAD, IServicesUtilVirtuosoAndReplication pServicesUtilVirtuosoAndReplication, ConfigService pConfigService)
+		private void ProcesarFilaColaImagenCategoria(ColaImagenCategoria pElementoColaImagenCategoria, EntityContext pEntityContext, LoggingService pLoggingService, ConfigService pConfigService)
 		{
 			try
 			{

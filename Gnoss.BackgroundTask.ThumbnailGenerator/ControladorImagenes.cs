@@ -1,27 +1,30 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading;
-using System.IO;
-using Es.Riam.Util;
-using System.Globalization;
-using System.Net;
+using BeetleX.Buffers;
+using Es.Riam.Gnoss.AD.EntityModel;
+using Es.Riam.Gnoss.Elementos.Suscripcion;
 using Es.Riam.Gnoss.Logica.ParametroAplicacion;
-using System.Xml;
 using Es.Riam.Gnoss.Servicios;
+using Es.Riam.Gnoss.Util.Configuracion;
 using Es.Riam.Gnoss.Util.General;
 using Es.Riam.Gnoss.Web.Controles.ServicioImagenesWrapper;
+using Es.Riam.Gnoss.Web.MVC.Models.Tesauro;
+using Es.Riam.Util;
 using Microsoft.Extensions.DependencyInjection;
-using Es.Riam.Gnoss.Util.Configuracion;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Processing;
+using Microsoft.Extensions.Logging;
 using Es.Riam.Gnoss.AD.EntityModel;
 using BeetleX.Buffers;
 using Es.Riam.Gnoss.Web.MVC.Models.Tesauro;
-using SixLabors.ImageSharp.Memory;
 using Microsoft.Extensions.Logging;
 using Es.Riam.Gnoss.Elementos.Suscripcion;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Xml;
+using NetVips;
 
 namespace Es.Riam.Gnoss.ProcesadoTareas
 {
@@ -184,9 +187,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
             {
                 Byte[] bufferFinal;
 
-
-                MemoryStream streamImagen = new MemoryStream(buffer);
-                SixLabors.ImageSharp.Image imagenGrande = SixLabors.ImageSharp.Image.Load(streamImagen);
+                using Image imagenGrande = Image.NewFromBuffer(buffer);
                 //System.Drawing.Image imagenGrande = System.Drawing.Image.FromStream(streamImagen);
 
                 //Extraigo el tamanio actual de la imagen para cacular el que deberá tener la imágen reducida:
@@ -202,12 +203,9 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                     nuevoAncho = MAX_SIZE_IMG;
                     nuevoAlto = (alto * nuevoAncho) / ancho;
 
-                    Image imagenReducida = UtilImages.AjustarImagen(imagenGrande, nuevoAncho, nuevoAlto);
-                    using (var ms = new MemoryStream())
-                    {
-                        imagenReducida.Save(ms, PngFormat.Instance);
-                        bufferFinal = ms.ToArray();
-                    }
+                    using Image imagenReducida = UtilImages.AjustarImagen(imagenGrande, nuevoAncho, nuevoAlto);
+
+                    bufferFinal = imagenReducida.PngsaveBuffer();
                 }
                 else
                 {
@@ -220,7 +218,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
 
                     //Rectangle rectOrigen = new Rectangle((int)posicionX, (int)posicionY, (int)imagenGrande.Width, (int)imagenGrande.Height);
                     //Rectangle rectDestino = new Rectangle(0, 0, imagenGrande.Width, imagenGrande.Height);
-                    
+
                     //grPhoto.DrawImage(imagenGrande, rectOrigen, rectDestino, GraphicsUnit.Pixel);
 
                     //bufferFinal = (byte[])new ImageConverter().ConvertTo(bmPhoto, typeof(byte[]));
@@ -228,25 +226,20 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                     //bmPhoto.Dispose();
                     //grPhoto.Dispose();
 
-                    imagenGrande.Mutate(x => x.Resize(MAX_SIZE_IMG, imagenGrande.Height));
-                    using (var ms = new MemoryStream())
-                    {
-                        imagenGrande.Save(ms, PngFormat.Instance);
-                        bufferFinal = ms.ToArray();
-                    }
+                    using Image imagenEnsanchada = imagenGrande.Resize(
+                        (double)MAX_SIZE_IMG / ancho,vscale: 1.0); // Mantiene el alto original
+
+                    bufferFinal = imagenEnsanchada.PngsaveBuffer();
                 }
 
                 if (imagenGrande.Height > 2 * imagenGrande.Width)
                 {
-                    Image imagenRecortar = Image.Load(new MemoryStream(bufferFinal));
+                    using Image imagenRecortar = Image.NewFromBuffer(bufferFinal);
                     bufferFinal = UtilImages.RecortarImagen(imagenRecortar, MAX_SIZE_IMG, MAX_SIZE_IMG * 2, 0, imagenGrande.Height / 2 - MAX_SIZE_IMG);
                 }
 
                 subida = mServicioImagenes.AgregarImagenEnMiniaturaADocumento(bufferFinal, pDocumentoID.ToString() + "_peque", pExtension);
 
-                //Disposo todo:
-                imagenGrande.Dispose();
-                streamImagen.Dispose();
             }
             return subida;
         }
@@ -269,11 +262,10 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
             {
                 if (!string.IsNullOrEmpty(pURL))
                 {
-                    WebRequest requestPic = WebRequest.Create(pURL);
-                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
-                    WebResponse responsePic = requestPic.GetResponse();
+                    byte[] bytesImagen = UtilWeb.WebRequestBytes("GET", pURL, null);
 
-                    Image img = Image.Load(responsePic.GetResponseStream());
+                    using Image img = Image.NewFromBuffer(bytesImagen);
+
 
                     //Extraigo el tamanio actual de la imagen para cacular el que deberá tener la imágen reducida:
                     int ancho = img.Width;
@@ -282,25 +274,23 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                     int nuevoAncho = 0;
                     int nuevoAlto = 0;
 
+                    byte[] bufferFinal;
                     //Si tiene una anchura superior a 240 la redimensionamos
                     if (ancho > MAX_SIZE_IMG)
                     {
                         nuevoAncho = MAX_SIZE_IMG;
                         nuevoAlto = (alto * nuevoAncho) / ancho;
-                        img.Mutate(x => x.Resize(nuevoAncho, nuevoAlto));
+                        using Image imgReducida = UtilImages.AjustarImagen(img, nuevoAncho, nuevoAlto);
+                        bufferFinal = imgReducida.JpegsaveBuffer(q: 85);
+                    }
+                    else
+                    {
+                        bufferFinal = img.JpegsaveBuffer(q: 85);
                     }
 
-
-                    MemoryStream ms = new MemoryStream();
-                    img.SaveAsJpeg(ms);
-
-                    byte[] buffer = ms.GetBuffer();
                     
-                    mCapturaRealizada = mServicioImagenes.AgregarImagenADirectorio(buffer, AbsolutePath, mFileName, ".jpg");
+                    mCapturaRealizada = mServicioImagenes.AgregarImagenADirectorio(bufferFinal, AbsolutePath, mFileName, ".jpg");
 
-
-
-                    ms.Dispose();
                     mServicioImagenes = null;
                 }
                 else
@@ -324,85 +314,55 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
 
             try
             {
-                Image img = null;
-                Image img_Max = null;
+                byte[] bytesImagen = null;
+
                 if (pURL.ToLower().EndsWith(".jpg") || pURL.ToLower().EndsWith(".jpeg") || pURL.ToLower().EndsWith(".png"))
                 {
                     #region Imagen
-                    WebRequest requestPic = WebRequest.Create(pURL);
-                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
-                    WebResponse responsePic = requestPic.GetResponse();
-
-                    img = Image.Load(responsePic.GetResponseStream());
-                    img_Max = img.Clone(x=>x.Resize(img.Width, img.Height));
-
-                    //mensaje += filaDoc.DocumentoID + "' de tipo Semántico Imagen se ha procesado";
-                    #endregion
-                }
-                else // Hipervínculo
-                {
-                    #region Hipervínculo
-
-                    //byte[] imagen = this.ObtenerImagenURLDocumentoDevuelveImagen(pURL);
-
-                    //MemoryStream ms = new MemoryStream(imagen);
-                    //img = Image.Load(ms);
-
-                    //MemoryStream ms_Max = new MemoryStream(mImagenMax);
-                    //img_Max = Image.Load(ms_Max);
+                    bytesImagen = UtilWeb.WebRequestBytes("GET", pURL, null);
 
                     #endregion
                 }
 
-                if (img != null && img_Max != null)
+                if (bytesImagen != null)
                 {
                     // Guardar la imagen sin redimensionar con nombre filaDoc.DocumentoID.ToString() en rutaDestino
-                    byte[] imagenArray = null;
+                    using Image img = Image.NewFromBuffer(bytesImagen);
+
                     mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
                     mServicioImagenes.Url = mURLServicioImagenes;
-                    MemoryStream ms = new MemoryStream();
-                    img.SaveAsJpeg(ms);
-                    imagenArray = ms.GetBuffer();
-                    ms.Dispose();
-                    mServicioImagenes.AgregarImagenADirectorio(imagenArray, pNuevaRutaDestino, pFileName, ".jpg");
-                    imagenArray = null;
+
+                    mServicioImagenes.AgregarImagenADirectorio(img.JpegsaveBuffer(q: 85), pNuevaRutaDestino, pFileName, ".jpg");
+
 
                     //Extraigo el tamanio actual de la imagen para cacular el que deberá tener la imágen reducida:
-                    int ancho = img_Max.Width;
-                    int alto = img_Max.Height;
-                    int nuevoAncho = 0;
-                    int nuevoAlto = 0;
+                    int ancho = img.Width;
+                    int alto = img.Height;
 
-                    //Trabajamos con mImagenMax
+                    // Generar variante por cada tamaño solicitado
 
                     foreach (int anchoImagenesInt in pTamaniosImagenesInt)
                     {
-                        // Guardar imagen redimensionada en rutaDestino
                         mServicioImagenes = new ServicioImagenes(pLoggingService, mConfigService, mLoggerFactory.CreateLogger<ServicioImagenes>(), mLoggerFactory);
                         mServicioImagenes.Url = mURLServicioImagenes;
-                        ms = new MemoryStream();
 
-                        mFileName = pFileNameCExtension.Substring(0, pFileNameCExtension.Length - ".jpg".Length) + "_" + anchoImagenesInt.ToString();
+                        mFileName = pFileNameCExtension.Substring(0, pFileNameCExtension.Length - ".jpg".Length) + "_" + anchoImagenesInt;
 
-                        //Si tiene una anchura superior a 240 la redimensionamos
+                        byte[] bufferVariante;
                         if (ancho > anchoImagenesInt)
                         {
-                            nuevoAncho = anchoImagenesInt;
-                            nuevoAlto = (alto * nuevoAncho) / ancho;
-                            img.Mutate(x => x.Resize(nuevoAncho, nuevoAlto));
-                            img.SaveAsJpeg(ms);
+                            int nuevoAncho = anchoImagenesInt;
+                            int nuevoAlto = (alto * nuevoAncho) / ancho;
+                            using Image imgReducida = UtilImages.AjustarImagen(img, nuevoAncho, nuevoAlto);
+                            bufferVariante = imgReducida.JpegsaveBuffer(q: 85);
                         }
                         else
                         {
-                            //Mantengo la imagen original
-                            img.SaveAsJpeg(ms);
+                            // Imagen más pequeña que el tamaño solicitado: guardar original
+                            bufferVariante = img.JpegsaveBuffer(q: 85);
                         }
 
-                        imagenArray = ms.GetBuffer();
-                        ms.Dispose();
-
-                        // 3º Subir las imagenes a la ruta
-                        mServicioImagenes.AgregarImagenADirectorio(imagenArray, pNuevaRutaDestino, mFileName, ".jpg");
+                        mServicioImagenes.AgregarImagenADirectorio(bufferVariante, pNuevaRutaDestino, mFileName, ".jpg");
                     }
 
                     mCapturaRealizada = true;
@@ -548,11 +508,10 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                     {
                         fotoactual = pUrlIntraGnoss + fotoactual;
                     }
+ 
+                    byte[] bytesImagen = UtilWeb.WebRequestBytes("GET", fotoactual, null);
 
-                    WebRequest requestPic = WebRequest.Create(fotoactual);
-                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
-                    WebResponse responsePic = requestPic.GetResponse();
-                    Image img = Image.Load(responsePic.GetResponseStream());
+                    using Image img = Image.NewFromBuffer(bytesImagen);
 
                     //Tiene un area minima suficiente
                     if (img.Height * img.Width > 10000)
@@ -560,7 +519,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
                         //Si la anchura no es superior al doble de la altura
                         if (img.Width < img.Height * 4)
                         {
-                            MemoryStream ms = new MemoryStream();
+                            byte[] buffer;
                             //Si tiene una anchura superior a 240 la redimensionamos
                             if (img.Width > MAX_SIZE_IMG)
                             {
@@ -572,21 +531,17 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
 
                                 //Reducción de la imagen sin perder calidad. 
                                 //GetThumbnailImage pierde calidad a partir de tamanios como 300x300 (http://stackoverflow.com/questions/7209891/image-getthumbnailimage-method-and-quality)
-                                img.Mutate(x => x.Resize(nuevoAncho, nuevoAlto));
-                                img.SaveAsJpeg(ms);
+                                using Image imgReducida = UtilImages.AjustarImagen(img, nuevoAncho, nuevoAlto);
+                                buffer = imgReducida.JpegsaveBuffer(q: 85);
                             }
                             else
                             {
-                                img.SaveAsJpeg(ms);
+                                buffer = img.JpegsaveBuffer(q: 85);
                             }
 
 
-
-                            byte[] buffer = ms.GetBuffer();
-
                             mCapturaRealizada = mServicioImagenes.AgregarImagenADirectorio(buffer, AbsolutePath, mFileName, ".jpg");
 
-                            ms.Dispose();
                             mServicioImagenes = null;
                             break;
                         }
@@ -617,7 +572,7 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
             if (!string.IsNullOrEmpty(token))
             {
                 string peticion = $"https://api.vimeo.com/videos/{pIdVideo}/pictures";
-                string response = UtilGeneral.WebRequest("GET", peticion, token, null);
+                string response = UtilWeb.WebRequest("GET", peticion, token, null);
                 string[] campos = response.Split(',');
 
                 for (int i = 0; i < campos.Length; i++)
@@ -686,49 +641,18 @@ namespace Es.Riam.Gnoss.ProcesadoTareas
 
         private void GenerarImagenCategoriaEnTamanio(byte[] pBytesImagen, int pTamanio, string pRutaImagen, string pNombre)
         {
-            byte[] buffer = null;
-            MemoryStream streamImagen = new MemoryStream(pBytesImagen);
-            Image imagenOriginal = Image.Load(streamImagen);
+            using Image imagenOriginal = Image.NewFromBuffer(pBytesImagen);
 
-            int ancho = imagenOriginal.Width;
-            int alto = imagenOriginal.Height;
+            // Redimensionar por el lado mayor manteniendo proporción
+            double scale = imagenOriginal.Width >= imagenOriginal.Height
+                ? (double)pTamanio / imagenOriginal.Width
+                : (double)pTamanio / imagenOriginal.Height;
 
-            int nuevoAncho = 0;
-            int nuevoAlto = 0;
+            using Image imagenRedimensionada = imagenOriginal.Resize(scale);
 
-            // Redimensionamos al tamaño indicado por su lado mayor
-            if (ancho == alto)
-            {
-                nuevoAlto = pTamanio;
-                nuevoAncho = pTamanio;
-            }
-            else if (ancho > alto)
-            {
-                nuevoAncho = pTamanio;
-                nuevoAlto = (nuevoAncho * alto) / ancho;
-            }
-            else
-            {
-                nuevoAlto = pTamanio;
-                nuevoAncho = (nuevoAlto * ancho) / alto;
-            }
+            string nombreImagen = pTamanio != MAX_SIZE_IMG ? $"{pNombre}_{pTamanio}" : pNombre;
 
-            imagenOriginal.Mutate(x => x.Resize(nuevoAncho, nuevoAlto));
-            using (var ms = new MemoryStream())
-            {
-                imagenOriginal.Save(ms, PngFormat.Instance);
-                buffer = ms.ToArray();
-            }
-
-            string nombreImagen = pNombre;
-            if (pTamanio != MAX_SIZE_IMG)
-            {
-                nombreImagen = $"{pNombre}_{pTamanio}";
-            }
-            mServicioImagenes.AgregarFichero(buffer, nombreImagen, ".png", pRutaImagen);
-
-            imagenOriginal.Dispose();
-            streamImagen.Dispose();
+            mServicioImagenes.AgregarFichero(imagenRedimensionada.PngsaveBuffer(), nombreImagen, ".png", pRutaImagen);
         }
 
         protected override ControladorServicioGnoss ClonarControlador()

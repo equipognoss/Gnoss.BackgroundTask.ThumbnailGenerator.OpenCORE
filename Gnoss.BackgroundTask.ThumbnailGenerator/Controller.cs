@@ -11,12 +11,9 @@ using Es.Riam.Gnoss.AD.ServiciosGenerales;
 using Es.Riam.Gnoss.AD.Virtuoso;
 using Es.Riam.Gnoss.CL;
 using Es.Riam.Gnoss.CL.Documentacion;
-using Es.Riam.Gnoss.CL.ParametrosProyecto;
 using Es.Riam.Gnoss.CL.ServiciosGenerales;
 using Es.Riam.Gnoss.Elementos.Documentacion;
 using Es.Riam.Gnoss.Elementos.ParametroAplicacion;
-using Es.Riam.Gnoss.Elementos.Suscripcion;
-using Es.Riam.Gnoss.Logica.BASE_BD;
 using Es.Riam.Gnoss.Logica.Documentacion;
 using Es.Riam.Gnoss.Logica.Parametro;
 using Es.Riam.Gnoss.Logica.ParametroAplicacion;
@@ -35,18 +32,14 @@ using Es.Riam.Util;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using System.Text.Json;
 using System;
-using System.Collections.Generic;
-using System.Data;
-using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
+using System.IO;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Xml;
 
 namespace Es.Riam.Gnoss.ServicioMantenimiento
 {
@@ -61,13 +54,13 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         public static int TIEMPOCAPTURAURL_SEGUNDOS;
 
         /// <summary>
-        /// DataSet de documentaciÛn con los documentos en cola.
+        /// DataSet de documentaci√≥n con los documentos en cola.
         /// </summary>
         private DataWrapperDocumentacion mDocumentoColaDW;
 
 
         /// <summary>
-        /// URL del servicio de im·genes.
+        /// URL del servicio de im√°genes.
         /// </summary>
         private string mURLServicioImagenesEcosistema;
 
@@ -77,6 +70,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         private int mTareaID = -1;
         private ILogger mlogger;
         private ILoggerFactory mLoggerFactory;
+        private RabbitMQClient mRabbitMQClient;
 
         /// <summary>
         /// Lista con el tamanio de las caputuras configuradas para cada proyecto.
@@ -108,7 +102,6 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             {
                 EntityContext entityContext = scope.ServiceProvider.GetRequiredService<EntityContext>();
                 LoggingService loggingService = scope.ServiceProvider.GetRequiredService<LoggingService>();
-                VirtuosoAD virtuosoAD = scope.ServiceProvider.GetRequiredService<VirtuosoAD>();
                 RedisCacheWrapper redisCacheWrapper = scope.ServiceProvider.GetRequiredService<RedisCacheWrapper>();
                 ConfigService configService = scope.ServiceProvider.GetRequiredService<ConfigService>();
                 IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication = scope.ServiceProvider.GetRequiredService<IServicesUtilVirtuosoAndReplication>();
@@ -122,14 +115,14 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
                     if (!string.IsNullOrEmpty(pFila))
                     {
-                        ColaDocumento filaColaDocumento = JsonConvert.DeserializeObject<ColaDocumento>(pFila);
+                        ColaDocumento filaColaDocumento = JsonSerializer.Deserialize<ColaDocumento>(pFila);
 
                         DocumentacionCN docCN = new DocumentacionCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<DocumentacionCN>(), mLoggerFactory);
 
                         DataWrapperDocumentacion dataWrapperDocumentacion = docCN.ObtenerDocumentosColaDocumentoRabbitMQ(filaColaDocumento.DocumentoID);
                         dataWrapperDocumentacion.ListaColaDocumento.Add(filaColaDocumento);
 
-                        ProcesarFilaColaDocumento(dataWrapperDocumentacion, entityContext, loggingService, redisCacheWrapper, virtuosoAD, servicesUtilVirtuosoAndReplication);
+                        ProcesarFilaColaDocumento(dataWrapperDocumentacion, entityContext, loggingService, redisCacheWrapper, servicesUtilVirtuosoAndReplication);
 
                         ControladorConexiones.CerrarConexiones(false);
                     }
@@ -147,7 +140,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             }
         }
 
-        private void ProcesarFilaColaDocumento(DataWrapperDocumentacion pDataWrapperDocumentacion, EntityContext entityContext, LoggingService loggingService, RedisCacheWrapper redisCacheWrapper, VirtuosoAD virtuosoAD, IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication)
+        private void ProcesarFilaColaDocumento(DataWrapperDocumentacion pDataWrapperDocumentacion, EntityContext entityContext, LoggingService loggingService, RedisCacheWrapper redisCacheWrapper, IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication)
         {
             try
             {
@@ -175,7 +168,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                     {
                         if (filaDoc.ProyectoID.HasValue && !mTamanioCapturasProyecto.ContainsKey(filaDoc.ProyectoID.Value))
                         {
-                            ProyectoCL proyectoCL = new ProyectoCL(entityContext, loggingService, redisCacheWrapper, mConfigService, virtuosoAD, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ProyectoCL>(), mLoggerFactory);
+                            ProyectoCL proyectoCL = new ProyectoCL(entityContext, loggingService, redisCacheWrapper, mConfigService, null, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ProyectoCL>(), mLoggerFactory);
                             Dictionary<string, string> paramsProy = proyectoCL.ObtenerParametrosProyecto(filaDoc.ProyectoID.Value);
                             proyectoCL.Dispose();
 
@@ -209,7 +202,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
                         if (filaDoc.Tipo == (short)TiposDocumentacion.Hipervinculo)
                         {
-                            #region HipervÌnculo
+                            #region Hiperv√≠nculo
                             try
                             {
                                 mensaje += filaDoc.DocumentoID + "' de tipo Hipervinculo se ha procesado";
@@ -233,7 +226,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     capturaCorrecta = contrImg.ObtenerImagenDesdeDescripcion(filaDoc.DocumentoID, filaDoc.Descripcion, urlIntraGnoss, loggingService, mConfigService, entityContext);
                                 }
 
-                                //Si no obtenemos imagen de la descripciÛn cogemos la Web completa
+                                //Si no obtenemos imagen de la descripci√≥n cogemos la Web completa
                                 //if (!capturaCorrecta)
                                 //{
                                 //    capturaCorrecta = contrImg.ObtenerImagenURLDocumento(filaDoc.DocumentoID, filaDoc.Enlace, loggingService);
@@ -288,7 +281,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -331,13 +324,13 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                         }
                                         else
                                         {
-                                            //puede estar retomando una imagen y el valor estarÌa en negativo
+                                            //puede estar retomando una imagen y el valor estar√≠a en negativo
                                             filaDoc.VersionFotoDocumento = Math.Abs(filaDoc.VersionFotoDocumento.Value) + 1;
                                         }
                                     }
                                     else if (VersionFotoDocumentoNegativo && !contrImg.TieneImagenEnDescripcion)
                                     {
-                                        //si no tiene im·genes en la descripciÛn y tenÌa versiÛn la ponemos en negativo para poder recuperarla
+                                        //si no tiene im√°genes en la descripci√≥n y ten√≠a versi√≥n la ponemos en negativo para poder recuperarla
                                         if (filaDoc.VersionFotoDocumento.HasValue && filaDoc.VersionFotoDocumento > 0)
                                         {
                                             filaDoc.VersionFotoDocumento = (-1) * filaDoc.VersionFotoDocumento;
@@ -361,7 +354,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -388,7 +381,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 }
                                 else if (pDataWrapperDocumentacion.ListaBaseRecursosOrganizacion.Count(baseRec => baseRec.BaseRecursosID.Equals(baseRecursosID)) > 0)
                                 {
-                                    //Es BR de organizaciÛn:
+                                    //Es BR de organizaci√≥n:
                                     organizacionID = pDataWrapperDocumentacion.ListaBaseRecursosOrganizacion.FirstOrDefault(baseRec => baseRec.BaseRecursosID.Equals(baseRecursosID)).OrganizacionID;
                                 }
 
@@ -431,7 +424,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -503,7 +496,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 {
                                     string imagenTed = ObtenerUrlImagenTed(enlace, loggingService);
 
-                                    // Dependiendo de la p·gina que sea la url de la imagen la cogemos de un sitio diferente de la cabecera
+                                    // Dependiendo de la p√°gina que sea la url de la imagen la cogemos de un sitio diferente de la cabecera
                                     if (enlace.StartsWith("http://www.ted.com/talks/") || enlace.StartsWith("www.ted.com/talks/") || enlace.StartsWith("ted.com/talks/"))
                                     {
                                         mensaje += filaDoc.DocumentoID + "' de tipo Video TED www.ted.com/talks se ha procesado";
@@ -544,7 +537,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }
@@ -579,7 +572,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
                             #endregion
                         }//Ya ha sido procesado el video o hace mas de dos dias q existe
@@ -627,7 +620,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     }
                                     else
                                     {
-                                        mensaje += " pero a˙n no existe el video en brightcove.";
+                                        mensaje += " pero a√∫n no existe el video en brightcove.";
                                     }
                                     #endregion
                                 }
@@ -636,14 +629,14 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     AgregarEstadoErrorAElementoCola(filaColaDoc);
                                     mensaje += " SIN exito con fallo.";
 
-                                    loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                    loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                                 }
                                 #endregion
                             }
                             else if (filaDoc.FechaCreacion < DateTime.Now.AddDays(-2))
                             {
                                 //Lo borro de la cola ya que no debe ser tratado:
-                                mensaje += "Video brightcove " + filaColaDoc.DocumentoID + "' descartado porque hace m·s de 2 dÌas que est· y no tiene foto.";
+                                mensaje += "Video brightcove " + filaColaDoc.DocumentoID + "' descartado porque hace m√°s de 2 d√≠as que est√° y no tiene foto.";
                                 EliminarFilaColaDocumento(pDataWrapperDocumentacion, filaColaDoc, entityContext);
                             }
                             else if (filaDoc.FechaCreacion < DateTime.Now.AddHours(-1))
@@ -670,10 +663,8 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     ParametroGeneralCN paramGeneralCN = new ParametroGeneralCN(entityContext, loggingService, mConfigService, servicesUtilVirtuosoAndReplication, mLoggerFactory.CreateLogger<ParametroGeneralCN>(), mLoggerFactory);
                                     ParametroGeneral filaParametrosGenerales = paramGeneralCN.ObtenerFilaParametrosGeneralesDeProyecto(filaDoc.ProyectoID.Value);
 
-                                    WebRequest requestPic = WebRequest.Create("http://fapi-top.prisasd.com/api/" + filaParametrosGenerales.TOPIDCuenta + "/" + filaDoc.Enlace + "/");
-                                    requestPic.Headers.Add("UserAgent", UtilWeb.GenerarUserAgent());
-                                    WebResponse responsePic = requestPic.GetResponse();
-                                    TextReader reader = new StreamReader(responsePic.GetResponseStream());
+                                    HttpResponseMessage httpResponseMessage = UtilWeb.HacerPeticionGetDevolviendoHttpResponseMessage("http://fapi-top.prisasd.com/api/" + filaParametrosGenerales.TOPIDCuenta + "/" + filaDoc.Enlace + "/");
+                                    TextReader reader = new StreamReader(httpResponseMessage.Content.ReadAsStreamAsync().GetAwaiter().GetResult());
                                     string jsonTOPString = reader.ReadToEnd();
                                     JsonTOPApi JsonTOPApi = Newtonsoft.Json.JsonConvert.DeserializeObject<JsonTOPApi>(jsonTOPString);
 
@@ -703,7 +694,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     }
                                     else
                                     {
-                                        mensaje += " pero a˙n no existe el video en TOP.";
+                                        mensaje += " pero a√∫n no existe el video en TOP.";
                                     }
                                     #endregion
                                 }
@@ -712,14 +703,14 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                     AgregarEstadoErrorAElementoCola(filaColaDoc);
                                     mensaje += " SIN exito con fallo.";
 
-                                    loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                    loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                                 }
                                 #endregion
                             }
                             else if (filaDoc.FechaCreacion < DateTime.Now.AddDays(-2))
                             {
                                 //Lo borro de la cola ya que no debe ser tratado:
-                                mensaje += "Video top " + filaColaDoc.DocumentoID + "' descartado porque hace m·s de 2 dÌas que est· y no tiene foto.";
+                                mensaje += "Video top " + filaColaDoc.DocumentoID + "' descartado porque hace m√°s de 2 d√≠as que est√° y no tiene foto.";
                                 EliminarFilaColaDocumento(pDataWrapperDocumentacion, filaColaDoc, entityContext);
                             }
                             else if (filaDoc.FechaCreacion < DateTime.Now.AddHours(-1))
@@ -735,14 +726,14 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                         }
                         else if (filaDoc.Tipo == (short)TiposDocumentacion.Semantico)
                         {
-                            #region Sem·ntico
+                            #region Sem√°ntico
                             try
                             {
                                 string[] infoExtra = filaColaDoc.InfoExtra.Split(new char[] { '|' });
 
                                 if (infoExtra != null && infoExtra[0] != "")
                                 {
-                                    // Si el recurso es OpenSeaDragon tratamos la imagen con la librerÌa y generamos las im·genes.
+                                    // Si el recurso es OpenSeaDragon tratamos la imagen con la librer√≠a y generamos las im√°genes.
                                     if (infoExtra[0].Equals("OpenSeaDragon"))
                                     {
                                         PartirImagenOpenSeaDragon(infoExtra[1], infoExtra[1], urlServicioImagenes, loggingService);
@@ -791,12 +782,12 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                             urlImagen = urlImagen.Replace("https://", "http://");
                                         }
 
-                                        //1∫ Obtenemos el byte[] de la imagen
+                                        //1¬∫ Obtenemos el byte[] de la imagen
                                         if (((urlImagen.StartsWith("http://www.youtube.com") || urlImagen.StartsWith("http://youtube.com") || urlImagen.StartsWith("www.youtube.com")) && (urlImagen.Contains("/watch?") || urlImagen.Contains("/embed/"))) || urlImagen.StartsWith("http://youtu.be/"))
                                         {
                                             #region Youtube
                                             urlImagen = ObtenerUrlImagenYoutube(urlImagen);
-                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem·ntico Youtube se ha procesado";
+                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem√°ntico Youtube se ha procesado";
                                             #endregion
                                         }
                                         else if (urlImagen.StartsWith("http://www.vimeo.com") || urlImagen.StartsWith("http://vimeo.com") || urlImagen.StartsWith("www.vimeo.com"))
@@ -810,7 +801,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                             if (exito)
                                             {
                                                 //Vimeo
-                                                mensaje += filaDoc.DocumentoID + "' de tipo Sem·ntico Vimeo se ha procesado";
+                                                mensaje += filaDoc.DocumentoID + "' de tipo Sem√°ntico Vimeo se ha procesado";
                                                 urlImagen = ObtenerUrlImagenVimeo(urlImagen, idVideo, entityContext, mConfigService, loggingService);
 
                                             }
@@ -821,7 +812,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                         {
                                             #region Slideshare
 
-                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem·ntico Slideshare se ha procesado";
+                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem√°ntico Slideshare se ha procesado";
 
                                             urlImagen = ObtenerUrlImagenSlideshare(urlImagen, loggingService);
 
@@ -831,7 +822,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                         {
                                             #region TED
 
-                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem·ntico TED se ha procesado";
+                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem√°ntico TED se ha procesado";
                                             urlImagen = ObtenerUrlImagenTed(urlImagen, loggingService);
 
                                             #endregion
@@ -839,7 +830,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                         else
                                         {
                                             #region WEB
-                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem·ntico Imagen se ha procesado";
+                                            mensaje += filaDoc.DocumentoID + "' de tipo Sem√°ntico Imagen se ha procesado";
                                             #endregion
                                         }
 
@@ -877,8 +868,8 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 }
                                 else
                                 {
-                                    //Lo borro de la cola ya que no debe ser tratado por no tener informaciÛn extra:
-                                    mensaje += filaColaDoc.DocumentoID + "' ha sido descartado porque no tiene informaciÛn extra.";
+                                    //Lo borro de la cola ya que no debe ser tratado por no tener informaci√≥n extra:
+                                    mensaje += filaColaDoc.DocumentoID + "' ha sido descartado porque no tiene informaci√≥n extra.";
                                     EliminarFilaColaDocumento(pDataWrapperDocumentacion, filaColaDoc, entityContext);
                                 }
                             }
@@ -887,7 +878,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                                 AgregarEstadoErrorAElementoCola(filaColaDoc);
                                 mensaje += " SIN exito con fallo.";
 
-                                loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                                loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
                             }
 
                             #endregion
@@ -922,7 +913,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             }
             catch (Exception ex)
             {
-                loggingService.GuardarLog("ERROR:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
+                loggingService.GuardarLog("ERROR:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
             }
         }
 
@@ -957,7 +948,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         }
 
 
-        private void EliminarFilaColaDocumento(DataWrapperDocumentacion pDataWrapperDocumentacion, ColaDocumento pFilaColaDoc, EntityContext entityContext)
+        private static void EliminarFilaColaDocumento(DataWrapperDocumentacion pDataWrapperDocumentacion, ColaDocumento pFilaColaDoc, EntityContext entityContext)
         {
             pDataWrapperDocumentacion.ListaColaDocumento.Remove(pFilaColaDoc);
             if (!entityContext.Entry(pFilaColaDoc).State.Equals(EntityState.Detached))
@@ -975,11 +966,12 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
                 RabbitMQClient.ReceivedDelegate funcionProcesarItem = new RabbitMQClient.ReceivedDelegate(ProcesarItem);
                 RabbitMQClient.ShutDownDelegate funcionShutDown = new RabbitMQClient.ShutDownDelegate(OnShutDown);
 
-                RabbitMQClient rabbitMQClient = new RabbitMQClient(RabbitMQClient.BD_SERVICIOS_WIN, "ColaMiniatura", loggingService, mConfigService, mLoggerFactory.CreateLogger<RabbitMQClient>(), mLoggerFactory, "", "ColaMiniatura");
+                mRabbitMQClient?.Dispose();
+                mRabbitMQClient = new RabbitMQClient(RabbitMQClient.BD_SERVICIOS_WIN, "ColaMiniatura", loggingService, mConfigService, mLoggerFactory.CreateLogger<RabbitMQClient>(), mLoggerFactory, "", "ColaMiniatura");
 
                 try
                 {
-                    rabbitMQClient.ObtenerElementosDeCola(funcionProcesarItem, funcionShutDown);
+                    mRabbitMQClient.ObtenerElementosDeCola(funcionProcesarItem, funcionShutDown);
                     mReiniciarLecturaRabbit = false;
                 }
                 catch (Exception ex)
@@ -993,7 +985,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         /// <summary>
         /// Procesa cada suscripcion para crear su notificacion correspondiente
         /// </summary>
-        public override void RealizarMantenimiento(EntityContext entityContext, EntityContextBASE entityContextBASE, UtilidadesVirtuoso utilidadesVirtuoso, LoggingService loggingService, RedisCacheWrapper redisCacheWrapper, GnossCache gnossCache, VirtuosoAD virtuosoAD, IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication)
+        public override void RealizarMantenimiento(EntityContext entityContext, EntityContextBASE entityContextBASE, UtilidadesVirtuoso utilidadesVirtuoso, LoggingService loggingService, RedisCacheWrapper redisCacheWrapper, GnossCache gnossCache, IServicesUtilVirtuosoAndReplication servicesUtilVirtuosoAndReplication)
         {
             #region Establezco el dominio de la cache
 
@@ -1015,14 +1007,14 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
 
         #region OpenSeaDragon
         /// <summary>
-        /// Divide una imagen de gran tamanio utilizando la librerÌa openseadragon
+        /// Divide una imagen de gran tamanio utilizando la librer√≠a openseadragon
         ///  
         /// </summary>
         /// <param name="rutaImagen">
         /// Ruta de la imagen a dividir
         /// </param>
         /// <param name="rutaGuardar">
-        /// Ruta donde guardar· las carpetas generadas
+        /// Ruta donde guardar√° las carpetas generadas
         /// </param>
         private void PartirImagenOpenSeaDragon(string pRutaImagen, string pRutaGuardar, string pUrlServicioImagenes, LoggingService loggingService)
         {
@@ -1045,14 +1037,14 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             stream.Close();
             stream.Dispose();
 
-            //// Generamos las im·genes de OpenSeaDragon
+            //// Generamos las im√°genes de OpenSeaDragon
             //SparseImageCreator s = new SparseImageCreator();
             //Microsoft.DeepZoomTools.Image imagen = new Microsoft.DeepZoomTools.Image(rutaImagenTemporal);
             //List<Microsoft.DeepZoomTools.Image> imagenes = new List<Microsoft.DeepZoomTools.Image>();
             //imagenes.Add(imagen);
             //s.Create(imagenes, rutaTemporalesImagenesOpenSeaDragon);
 
-            // Recorremos las im·genes guardadas en una carpeta temporal y las subimos con el servicio im·genes
+            // Recorremos las im√°genes guardadas en una carpeta temporal y las subimos con el servicio im√°genes
             DirectoryInfo dirImagenesTemporales = new DirectoryInfo(rutaTemporalesImagenesOpenSeaDragon + "_files");
             DirectoryInfo[] subDirImagenesTemporales = dirImagenesTemporales.GetDirectories();
 
@@ -1107,11 +1099,11 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         /// Agrega o incrementa el estado de error de un documento.
         /// </summary>
         /// <param name="pFilaColaDoc">Fila de la cola de documento</param>
-        private void AgregarEstadoErrorAElementoCola(AD.EntityModel.Models.Documentacion.ColaDocumento pFilaColaDoc)
+        private static void AgregarEstadoErrorAElementoCola(AD.EntityModel.Models.Documentacion.ColaDocumento pFilaColaDoc)
         {
             if (pFilaColaDoc.Estado < 4)
             {
-                //Agrego o aumento el n˙mero de error.
+                //Agrego o aumento el n√∫mero de error.
                 pFilaColaDoc.Estado = (short)(pFilaColaDoc.Estado + 1);
             }
             else
@@ -1124,40 +1116,13 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             pFilaColaDoc.FechaProcesado = DateTime.Now;
         }
 
-        /// <summary>
-        /// Crea un entrada en el registro del sistema.
-        /// </summary>
-        /// <param name="pEstado">Estado del servicio</param>
-        /// <param name="pDetalles">Detalles de funcionamiento</param>
-        /// <returns>Entrarda del registro</returns>
-        private String CrearEntradaRegistro(LogStatus pEstado, String pDetalles)
-        {
-            String entradaLog = String.Empty;
-            switch (pEstado)
-            {
-                case LogStatus.Correcto:
-                    entradaLog = "\r\n\t >> OK: ";
-                    break;
-                case LogStatus.Error:
-                    entradaLog = "\r\n\t >> ALERT: ";
-                    break;
-                case LogStatus.NoCreadas:
-                    entradaLog = "\r\n\t >> OK: ";
-                    break;
-            }
-            return entradaLog + pDetalles;
-        }
-
         private string ObtenerTagHeadHTML(string pUrl, LoggingService loggingService)
         {
-            HttpWebRequest req = (HttpWebRequest)WebRequest.Create(pUrl);
             string pageHtml = "";
-            req.UserAgent = UtilWeb.GenerarUserAgent();
-            HttpWebResponse resp = null;
             try
             {
-                resp = (HttpWebResponse)req.GetResponse();
-                Stream istrm = resp.GetResponseStream();
+                HttpResponseMessage httpResponseMessage = UtilWeb.HacerPeticionGetDevolviendoHttpResponseMessage(pUrl);
+                Stream istrm = httpResponseMessage.Content.ReadAsStreamAsync().GetAwaiter().GetResult();
                 StreamReader rdr = new StreamReader(istrm, Encoding.UTF8, true);
 
                 pageHtml = rdr.ReadToEnd();
@@ -1170,11 +1135,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             }
             catch (Exception ex)
             {
-                loggingService.GuardarLog("ERROR en la obtenciÛn de la cabecera:  ExcepciÛn: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
-            }
-            finally
-            {
-                if (resp != null) resp.Close();
+                loggingService.GuardarLog("ERROR en la obtenci√≥n de la cabecera:  Excepci√≥n: " + ex.ToString() + "\n\n\tTraza: " + ex.StackTrace, mlogger);
             }
 
             return pageHtml;
@@ -1183,9 +1144,9 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         #region URLImagenes
 
         /// <summary>
-        /// MÈtodo privado para la obtenciÛn de la url de la imagen de los vÌdeos de Youtube
+        /// M√©todo privado para la obtenci√≥n de la url de la imagen de los v√≠deos de Youtube
         /// </summary>
-        /// <param name="pUrlVideo">Url del vÌdeo</param>
+        /// <param name="pUrlVideo">Url del v√≠deo</param>
         /// <returns>Url de la imagen</returns>
         private string ObtenerUrlImagenYoutube(string pUrlVideo)
         {
@@ -1213,9 +1174,9 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         }
 
         /// <summary>
-        /// MÈtodo privado para la obtenciÛn de la url de la imagen de los vÌdeos de VIMEO
+        /// M√©todo privado para la obtenci√≥n de la url de la imagen de los v√≠deos de VIMEO
         /// </summary>
-        /// <param name="pUrlVideo">Url del vÌdeo</param>
+        /// <param name="pUrlVideo">Url del v√≠deo</param>
         /// <returns>Url de la imagen</returns>
         private string ObtenerUrlImagenVimeo(string pUrlVideo, int pIdVideo, EntityContext pEntityContext, ConfigService pConfigService, LoggingService pLoggingService)
         {
@@ -1226,7 +1187,7 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
             if (!string.IsNullOrEmpty(token))
             {
                 string peticion = $"https://api.vimeo.com/videos/{pIdVideo}/pictures";
-                string response = UtilGeneral.WebRequest("GET", peticion, token, null);
+                string response = UtilWeb.WebRequest("GET", peticion, token, null);
                 string[] campos = response.Split(',');
 
                 for (int i = 0; i < campos.Length; i++)
@@ -1244,9 +1205,9 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         }
 
         /// <summary>
-        /// MÈtodo privado para la obtenciÛn de la url de la imagen de las presentaciones de slideshare
+        /// M√©todo privado para la obtenci√≥n de la url de la imagen de las presentaciones de slideshare
         /// </summary>
-        /// <param name="pUrlVideo">Url de la presentaciÛn</param>
+        /// <param name="pUrlVideo">Url de la presentaci√≥n</param>
         /// <returns>Url de la imagen</returns>
         private string ObtenerUrlImagenSlideshare(string pUrlVideo, LoggingService loggingService)
         {
@@ -1294,9 +1255,9 @@ namespace Es.Riam.Gnoss.ServicioMantenimiento
         }
 
         /// <summary>
-        /// MÈtodo privado para la obtenciÛn de la url de la imagen de los vÌdeos de TED
+        /// M√©todo privado para la obtenci√≥n de la url de la imagen de los v√≠deos de TED
         /// </summary>
-        /// <param name="pUrlVideo">Url de la presentaciÛn</param>
+        /// <param name="pUrlVideo">Url de la presentaci√≥n</param>
         /// <returns>Url de la imagen</returns>
         private string ObtenerUrlImagenTed(string pUrlVideo, LoggingService loggingService)
         {
